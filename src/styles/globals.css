@@ -1,0 +1,462 @@
+/* Custom CSS for MediLab Secure Frontend */
+
+/* Global Styles */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Custom Components */
+.fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Loading Spinner */
+.spinner {
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #3498db;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Custom Button Styles */
+.btn-primary {
+  @apply bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors duration-200;
+}
+
+.btn-secondary {
+  @apply bg-gray-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-700 transition-colors duration-200;
+}
+
+.btn-success {
+  @apply bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors duration-200;
+}
+
+.btn-danger {
+  @apply bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors duration-200;
+}
+
+.btn-outline {
+  @apply bg-white text-blue-600 border border-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-blue-50 transition-colors duration-200;
+}
+
+/* Form Elements */
+.form-input {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200;
+}
+
+.form-input:focus {
+  outline: none;
+}
+
+.form-error {
+  @apply border-red-500 focus:ring-red-500 focus:border-red-500;
+}
+
+.form-success {
+  @apply border-green-500 focus:ring-green-500 focus:border-green-500;
+}
+
+/* Card Styles */
+.card {
+  @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+}
+
+.card-header {
+  @apply border-b border-gray-200 pb-4 mb-4;
+}
+
+.card-footer {
+  @apply border-t border-gray-200 pt-4 mt-4;
+}
+
+/* Badge Styles */
+.badge {
+  @apply px-2 py-1 rounded-full text-xs font-medium;
+}
+
+.badge-primary {
+  @apply bg-blue-100 text-blue-600;
+}
+
+.badge-secondary {
+  @apply bg-gray-100 text-gray-600;
+}
+
+.badge-success {
+  @apply bg-green-100 text-green-600;
+}
+
+.badge-danger {
+  @apply bg-red-100 text-red-600;
+}
+
+.badge-warning {
+  @apply bg-yellow-100 text-yellow-600;
+}
+
+.badge-info {
+  @apply bg-purple-100 text-purple-600;
+}
+
+/* Alert Styles */
+.alert {
+  @apply p-4 rounded-lg border;
+}
+
+.alert-success {
+  @apply bg-green-50 border-green-200 text-green-800;
+}
+
+.alert-error {
+  @apply bg-red-50 border-red-200 text-red-800;
+}
+
+.alert-warning {
+  @apply bg-yellow-50 border-yellow-200 text-yellow-800;
+}
+
+.alert-info {
+  @apply bg-blue-50 border-blue-200 text-blue-800;
+}
+
+/* Navigation Styles */
+.nav-link {
+  @apply flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200;
+}
+
+.nav-link-active {
+  @apply bg-blue-100 text-blue-700;
+}
+
+.nav-link-inactive {
+  @apply text-gray-600 hover:bg-gray-100 hover:text-gray-900;
+}
+
+/* Table Styles */
+.table {
+  @apply w-full divide-y divide-gray-200;
+}
+
+.table-header {
+  @apply bg-gray-50;
+}
+
+.table-header th {
+  @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+}
+
+.table-body {
+  @apply bg-white divide-y divide-gray-200;
+}
+
+.table-body td {
+  @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
+}
+
+.table-body tr:hover {
+  @apply bg-gray-50;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  @apply fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50;
+}
+
+.modal-container {
+  @apply relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white;
+}
+
+.modal-header {
+  @apply flex justify-between items-center pb-3;
+}
+
+.modal-body {
+  @apply py-3;
+}
+
+.modal-footer {
+  @apply flex justify-end pt-3 space-x-2;
+}
+
+/* Security Indicators */
+.security-indicator {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.security-high {
+  @apply bg-green-100 text-green-800;
+}
+
+.security-medium {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.security-low {
+  @apply bg-red-100 text-red-800;
+}
+
+/* Password Strength Meter */
+.password-strength {
+  @apply w-full h-2 bg-gray-200 rounded-full overflow-hidden;
+}
+
+.password-strength-bar {
+  @apply h-full transition-all duration-300;
+}
+
+.strength-very-weak {
+  @apply bg-red-500 w-1/5;
+}
+
+.strength-weak {
+  @apply bg-orange-500 w-2/5;
+}
+
+.strength-fair {
+  @apply bg-yellow-500 w-3/5;
+}
+
+.strength-good {
+  @apply bg-blue-500 w-4/5;
+}
+
+.strength-strong {
+  @apply bg-green-500 w-full;
+}
+
+/* Calendar Styles */
+.calendar-grid {
+  @apply grid grid-cols-7 gap-1;
+}
+
+.calendar-day {
+  @apply aspect-square flex items-center justify-center text-sm border border-gray-200 hover:bg-gray-50 cursor-pointer;
+}
+
+.calendar-day-selected {
+  @apply bg-blue-600 text-white;
+}
+
+.calendar-day-disabled {
+  @apply text-gray-400 cursor-not-allowed;
+}
+
+.calendar-day-today {
+  @apply bg-blue-100 text-blue-700 font-semibold;
+}
+
+/* Status Indicators */
+.status-online {
+  @apply w-3 h-3 bg-green-400 rounded-full;
+}
+
+.status-offline {
+  @apply w-3 h-3 bg-gray-400 rounded-full;
+}
+
+.status-away {
+  @apply w-3 h-3 bg-yellow-400 rounded-full;
+}
+
+.status-busy {
+  @apply w-3 h-3 bg-red-400 rounded-full;
+}
+
+/* Progress Bar */
+.progress-bar {
+  @apply w-full bg-gray-200 rounded-full h-2.5;
+}
+
+.progress-fill {
+  @apply bg-blue-600 h-2.5 rounded-full transition-all duration-300;
+}
+
+/* Skeleton Loading */
+.skeleton {
+  @apply animate-pulse bg-gray-300 rounded;
+}
+
+.skeleton-text {
+  @apply h-4 bg-gray-300 rounded w-3/4;
+}
+
+.skeleton-avatar {
+  @apply h-10 w-10 bg-gray-300 rounded-full;
+}
+
+/* Responsive Utilities */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Print Styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .page-break {
+    page-break-after: always;
+  }
+}
+
+/* Dark Mode Support (if needed in future) */
+@media (prefers-color-scheme: dark) {
+  /* Dark mode styles can be added here */
+}
+
+/* Focus States for Accessibility */
+.focus-visible:focus-visible {
+  @apply ring-2 ring-blue-500 ring-offset-2 outline-none;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  .card {
+    @apply border-2 border-gray-800;
+  }
+  
+  .btn-primary {
+    @apply border-2 border-blue-800;
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Custom Tooltip */
+.tooltip {
+  @apply relative inline-block;
+}
+
+.tooltip .tooltip-text {
+  @apply invisible absolute z-10 w-32 bg-gray-900 text-white text-xs rounded py-1 px-2 
+         opacity-0 transition-opacity duration-300;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -4rem;
+}
+
+.tooltip:hover .tooltip-text {
+  @apply visible opacity-100;
+}
+
+/* Medical System Specific Styles */
+.appointment-card {
+  @apply border-l-4 border-blue-500 pl-4;
+}
+
+.appointment-urgent {
+  @apply border-l-4 border-red-500 pl-4;
+}
+
+.doctor-rating {
+  @apply flex items-center space-x-1;
+}
+
+.medical-badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800;
+}
+
+.health-indicator {
+  @apply w-4 h-4 rounded-full;
+}
+
+.health-good {
+  @apply bg-green-400;
+}
+
+.health-fair {
+  @apply bg-yellow-400;
+}
+
+.health-poor {
+  @apply bg-red-400;
+}
+
+/* Security Icons */
+.security-icon {
+  @apply inline-flex items-center justify-center w-5 h-5 text-green-600;
+}
+
+.security-warning {
+  @apply inline-flex items-center justify-center w-5 h-5 text-yellow-600;
+}
+
+.security-error {
+  @apply inline-flex items-center justify-center w-5 h-5 text-red-600;
+}

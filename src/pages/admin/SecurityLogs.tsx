@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { securityUtils } from '../../utils/security';
-import { api } from '../../api/axios.config';
+import { SecurityUtils } from '../../utils/SecurityUtils';
+import apiClient from '../../api/axios.config';
 import { SecurityEvent } from '../../types/auth.types';
 
 interface SecurityLogFilters {
@@ -63,21 +63,19 @@ const SecurityLogsPage: React.FC = () => {
   const loadSecurityLogs = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/admin/security-logs');
+      const response = await apiClient.get('/admin/security-logs');
       setLogs(response.data);
-      
-      securityUtils.logSecurityEvent({
-        type: 'ADMIN_ACTION',
-        details: { action: 'view_security_logs', logCount: response.data.length },
-        severity: 'low',
+        SecurityUtils.logSecurityEvent({
+        action: 'view_security_logs',
+        success: true,
+        details: { logCount: response.data.length },
         userId: user?.id
       });
-    } catch (error) {
-      console.error('Failed to load security logs:', error);
-      securityUtils.logSecurityEvent({
-        type: 'DATA_ACCESS_ERROR',
-        details: { action: 'load_security_logs', error: error.message },
-        severity: 'high',
+    } catch (error) {      console.error('Failed to load security logs:', error);
+      SecurityUtils.logSecurityEvent({
+        action: 'load_security_logs_error',
+        success: false,
+        details: { error: (error as any)?.message || 'Unknown error' },
         userId: user?.id
       });
     } finally {
@@ -87,7 +85,7 @@ const SecurityLogsPage: React.FC = () => {
 
   const loadSecurityStats = async () => {
     try {
-      const response = await api.get('/admin/security-stats');
+      const response = await apiClient.get('/admin/security-stats');
       setStats(response.data);
     } catch (error) {
       console.error('Failed to load security stats:', error);
@@ -214,7 +212,7 @@ const SecurityLogsPage: React.FC = () => {
 
   const exportLogs = async () => {
     try {
-      const response = await api.get('/admin/security-logs/export', {
+      const response = await apiClient.get('/admin/security-logs/export', {
         params: filters,
         responseType: 'blob'
       });

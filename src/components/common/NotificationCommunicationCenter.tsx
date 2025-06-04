@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useNotifications } from '../notifications/NotificationSystem';
-import { securityUtils } from '../../utils/security';
-import { api } from '../../api/axios.config';
+import { SecurityUtils } from '../../utils/SecurityUtils';
+import apiClient from '../../api/axios.config';
 
 // Enhanced notification interface for communication center
 interface ExtendedNotification {
@@ -68,9 +67,8 @@ interface NotificationPreferences {
   emergencyOverride: boolean;
 }
 
-const NotificationCommunicationCenter: React.FC = () => {
-  const { user } = useAuth();
-  const { notifications: basicNotifications, markAsRead, markAllAsRead, removeNotification } = useNotifications();
+const NotificationCommunicationCenter: React.FC = () => {  const { user } = useAuth();
+  // Note: useNotifications hook is available but not used in this enhanced component
   
   // State management
   const [notifications, setNotifications] = useState<ExtendedNotification[]>([]);
@@ -98,7 +96,7 @@ const NotificationCommunicationCenter: React.FC = () => {
   const loadEnhancedNotifications = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/notifications/enhanced');
+      const response = await apiClient.get('/notifications/enhanced');
       setNotifications(response.data);
     } catch (error) {
       console.error('Failed to load enhanced notifications:', error);
@@ -109,7 +107,7 @@ const NotificationCommunicationCenter: React.FC = () => {
 
   const loadNotificationPreferences = async () => {
     try {
-      const response = await api.get('/notifications/preferences');
+      const response = await apiClient.get('/notifications/preferences');
       setPreferences(response.data);
     } catch (error) {
       console.error('Failed to load notification preferences:', error);
@@ -118,14 +116,13 @@ const NotificationCommunicationCenter: React.FC = () => {
 
   const saveNotificationPreferences = async (newPreferences: NotificationPreferences) => {
     try {
-      await api.put('/notifications/preferences', newPreferences);
+      await apiClient.put('/notifications/preferences', newPreferences);
       setPreferences(newPreferences);
-      
-      // Log security event
-      securityUtils.logSecurityEvent({
-        type: 'NOTIFICATION_SETTINGS',
-        details: { action: 'preferences_updated' },
-        severity: 'low',
+        // Log security event
+      SecurityUtils.logSecurityEvent({
+        action: 'notification_preferences_updated',
+        success: true,
+        details: { preferencesCount: Object.keys(newPreferences).length },
         userId: user?.id
       });
     } catch (error) {
@@ -191,10 +188,9 @@ const NotificationCommunicationCenter: React.FC = () => {
       markNotificationAsRead(notification.id);
     }
   };
-
   const markNotificationAsRead = async (id: string) => {
     try {
-      await api.patch(`/notifications/${id}/read`);
+      await apiClient.patch(`/notifications/${id}/read`);
       setNotifications(prev =>
         prev.map(n => n.id === id ? { ...n, read: true } : n)
       );
@@ -202,10 +198,9 @@ const NotificationCommunicationCenter: React.FC = () => {
       console.error('Failed to mark notification as read:', error);
     }
   };
-
   const deleteNotification = async (id: string) => {
     try {
-      await api.delete(`/notifications/${id}`);
+      await apiClient.delete(`/notifications/${id}`);
       setNotifications(prev => prev.filter(n => n.id !== id));
       if (selectedNotification?.id === id) {
         setSelectedNotification(null);
@@ -214,10 +209,9 @@ const NotificationCommunicationCenter: React.FC = () => {
       console.error('Failed to delete notification:', error);
     }
   };
-
   const handleMarkAllAsRead = async () => {
     try {
-      await api.patch('/notifications/read-all');
+      await apiClient.patch('/notifications/read-all');
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch (error) {
       console.error('Failed to mark all as read:', error);
@@ -238,26 +232,24 @@ const NotificationCommunicationCenter: React.FC = () => {
       formData.append('subject', messageData.subject);
       formData.append('content', messageData.content);
       formData.append('priority', messageData.priority);
-      
-      messageData.attachments?.forEach((file, index) => {
+        messageData.attachments?.forEach((file, index) => {
         formData.append(`attachment_${index}`, file);
       });
 
-      await api.post('/messages/send', formData, {
+      await apiClient.post('/messages/send', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
       setMessageComposer({ isOpen: false });
       
       // Log security event
-      securityUtils.logSecurityEvent({
-        type: 'MESSAGE_SENT',
+      SecurityUtils.logSecurityEvent({
+        action: 'message_sent',
+        success: true,
         details: { 
-          action: 'message_sent',
           recipientId: messageData.recipientId,
           subject: messageData.subject
         },
-        severity: 'low',
         userId: user?.id
       });
     } catch (error) {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { UserRole } from '../../types/auth.types';
+import { User } from 'lucide-react';
 
 interface SidebarProps {
   userRole: UserRole;
@@ -30,7 +31,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole }) => {
     ];
 
     switch (role) {
-      case 'PATIENT':
+      case UserRole.PATIENT:
         return [
           ...baseItems,
           {
@@ -71,7 +72,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole }) => {
           },
         ];
 
-      case 'DOCTOR':
+      case UserRole.DOCTOR:
         return [
           ...baseItems,
           {
@@ -112,7 +113,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole }) => {
           },
         ];
 
-      case 'ADMIN':
+      case UserRole.ADMIN:
         return [
           ...baseItems,
           {

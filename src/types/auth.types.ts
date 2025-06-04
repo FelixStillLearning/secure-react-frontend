@@ -6,9 +6,14 @@ export interface User {
   isActive: boolean;
   lastLogin?: string;
   profile?: UserProfile;
+  name?: string; // Display name property used in components
 }
 
-export type UserRole = 'PATIENT' | 'DOCTOR' | 'ADMIN';
+export enum UserRole {
+  PATIENT = 'patient',
+  DOCTOR = 'doctor',
+  ADMIN = 'admin'
+}
 
 export interface UserProfile {
   firstName?: string;
@@ -77,6 +82,22 @@ export interface SecurityEvent {
   timestamp?: string;
 }
 
+export interface SecurityLog {
+  id: string;
+  type: string;
+  severity?: string;
+  timestamp?: string;
+  userId?: string;
+  details?: Record<string, any>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SecurityLogWithUser extends SecurityLog {
+  userName?: string;
+  userEmail?: string;
+}
+
 export interface DeviceFingerprint {
   userAgent: string;
   language: string;
@@ -140,19 +161,37 @@ export interface ApiError {
 
 // Medical system specific types
 export interface Patient extends User {
+  firstName?: string; // Direct name properties for easier access
+  lastName?: string;
+  phoneNumber?: string;
+  allergies?: string;
   medicalHistory?: MedicalHistory[];
   appointments?: Appointment[];
   insuranceInfo?: InsuranceInfo;
+  dateOfBirth?: string;
+  gender?: 'MALE' | 'FEMALE' | 'OTHER';
+  bloodType?: string;
+  emergencyContact?: string;
 }
 
 export interface Doctor extends User {
-  specialization: string;
+  specialization: Specialization | string;
   licenseNumber: string;
   experience: number;
+  experienceYears?: number; // alias for experience for backward compatibility
+  education?: string;
   consultationFee: number;
   availability: DoctorAvailability[];
   rating?: number;
   reviewsCount?: number;
+  // Additional properties from backend and UI usage
+  user?: User; // Sometimes the doctor has a nested user property
+  averageRating?: number;
+  totalReviews?: number;
+  hospitalName?: string;
+  hospital?: string; // Hospital name property used in appointments
+  phoneNumber?: string;
+  bio?: string;
 }
 
 export interface MedicalHistory {
@@ -171,10 +210,13 @@ export interface Appointment {
   patientId: string;
   doctorId: string;
   dateTime: string;
+  appointmentDate?: string; // Alias for dateTime for backward compatibility
   duration: number;
   status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
   type: 'CONSULTATION' | 'FOLLOW_UP' | 'EMERGENCY';
+  appointmentType?: string; // String representation of type for UI
   notes?: string;
+  doctorNotes?: string; // Additional notes from doctor
   prescription?: string;
   fee: number;
   createdAt: string;
@@ -186,6 +228,24 @@ export interface DoctorAvailability {
   startTime: string; // HH:mm
   endTime: string; // HH:mm
   isAvailable: boolean;
+}
+
+export interface DoctorSchedule {
+  id: string;
+  doctorId: string;
+  dayOfWeek: number; // 0-6 (Sunday-Saturday)
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  isAvailable: boolean;
+  maxPatients: number;
+  slotDurationMinutes?: number;
+  createdAt?: string;
+}
+
+export interface TimeSlot {
+  time: string;
+  available: boolean;
+  appointmentId?: string;
 }
 
 export interface InsuranceInfo {

@@ -26,6 +26,15 @@ export interface User {
   isVerified?: boolean;
   profileComplete?: boolean;
   lastLogin?: string;
+  profile?: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    address?: string;
+    dateOfBirth?: string;
+    gender?: 'MALE' | 'FEMALE' | 'OTHER';
+    avatar?: string;
+  };
 }
 
 // Authentication state interface

@@ -1,11 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { securityUtils } from '../../utils/security';
-import { api } from '../../api/axios.config';
-import { Appointment, Doctor, Review } from '../../types/auth.types';
+import { auditLogger } from '../../utils/security';
+import api from '../../api/axios.config';
+import { Appointment, Doctor } from '../../types/auth.types';
 
 interface AppointmentWithDoctor extends Appointment {
   doctor: Doctor;
+  appointmentDate?: string; // Alias for dateTime
+  appointmentType?: string; // Additional property from backend
+  hasReview?: boolean; // Whether this appointment has been reviewed
+  diagnosis?: string; // Diagnosis from the appointment
 }
 
 interface AppointmentFilters {
@@ -30,62 +34,72 @@ const AppointmentHistoryPage: React.FC = () => {
     dateTo: '',
     doctorId: ''
   });
-
-  useEffect(() => {
-    loadAppointments();
+  // Helper function to get appointment date
+  const getAppointmentDate = useCallback((appointment: AppointmentWithDoctor): string => {
+    return appointment.appointmentDate || appointment.dateTime;
   }, []);
 
-  useEffect(() => {
-    applyFilters();
-  }, [appointments, filters]);
+  // Helper function to get specialization name
+  const getSpecializationName = useCallback((specialization: any): string => {
+    if (!specialization) return 'Not specified';
+    if (typeof specialization === 'string') return specialization;
+    return specialization.name || 'Not specified';
+  }, []);
 
-  const loadAppointments = async () => {
+  // Helper function to map status to lowercase for filtering
+  const normalizeStatus = useCallback((status: string): string => {
+    const statusMap: Record<string, string> = {
+      'PENDING': 'scheduled',
+      'CONFIRMED': 'confirmed', 
+      'COMPLETED': 'completed',
+      'CANCELLED': 'cancelled'
+    };
+    return statusMap[status] || status.toLowerCase();
+  }, []);
+  const loadAppointments = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get('/patients/appointments/history');
       setAppointments(response.data);
       
-      securityUtils.logSecurityEvent({
-        type: 'DATA_ACCESS',
-        details: { action: 'view_appointment_history', appointmentCount: response.data.length },
-        severity: 'low',
-        userId: user?.id
-      });
+      auditLogger.log('DATA_ACCESS', true, { 
+        action: 'view_appointment_history', 
+        appointmentCount: response.data.length 
+      }, user?.id);
     } catch (error) {
       console.error('Failed to load appointments:', error);
-      securityUtils.logSecurityEvent({
-        type: 'DATA_ACCESS_ERROR',
-        details: { action: 'load_appointment_history', error: error.message },
-        severity: 'medium',
-        userId: user?.id
-      });
+      auditLogger.log('DATA_ACCESS_ERROR', false, { 
+        action: 'load_appointment_history', 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      }, user?.id);
     } finally {
       setLoading(false);
     }
-  };
-
-  const applyFilters = () => {
+  }, [user?.id]);
+  const applyFilters = useCallback(() => {
     let filtered = [...appointments];
 
     // Status filter
     if (filters.status !== 'all') {
-      filtered = filtered.filter(appointment => appointment.status === filters.status);
+      filtered = filtered.filter(appointment => normalizeStatus(appointment.status) === filters.status);
     }
 
     // Date range filter
     if (filters.dateFrom) {
       const fromDate = new Date(filters.dateFrom);
-      filtered = filtered.filter(appointment => 
-        new Date(appointment.appointmentDate) >= fromDate
-      );
+      filtered = filtered.filter(appointment => {
+        const appointmentDate = getAppointmentDate(appointment);
+        return appointmentDate ? new Date(appointmentDate) >= fromDate : false;
+      });
     }
 
     if (filters.dateTo) {
       const toDate = new Date(filters.dateTo);
       toDate.setHours(23, 59, 59, 999);
-      filtered = filtered.filter(appointment => 
-        new Date(appointment.appointmentDate) <= toDate
-      );
+      filtered = filtered.filter(appointment => {
+        const appointmentDate = getAppointmentDate(appointment);
+        return appointmentDate ? new Date(appointmentDate) <= toDate : false;
+      });
     }
 
     // Doctor filter
@@ -94,41 +108,43 @@ const AppointmentHistoryPage: React.FC = () => {
     }
 
     // Sort by date (newest first)
-    filtered.sort((a, b) => 
-      new Date(b.appointmentDate).getTime() - new Date(a.appointmentDate).getTime()
-    );
+    filtered.sort((a, b) => {
+      const aDate = getAppointmentDate(a);
+      const bDate = getAppointmentDate(b);
+      if (!aDate || !bDate) return 0;
+      return new Date(bDate).getTime() - new Date(aDate).getTime();
+    });
 
     setFilteredAppointments(filtered);
-  };
-
+  }, [appointments, filters, getAppointmentDate, normalizeStatus]);
   const handleAppointmentClick = (appointment: AppointmentWithDoctor) => {
     setSelectedAppointment(appointment);
     setShowAppointmentModal(true);
     
-    securityUtils.logSecurityEvent({
-      type: 'DATA_ACCESS',
-      details: { action: 'view_appointment_details', appointmentId: appointment.id },
-      severity: 'low',
-      userId: user?.id
-    });
+    auditLogger.log('DATA_ACCESS', true, { 
+      action: 'view_appointment_details', 
+      appointmentId: appointment.id 
+    }, user?.id);
   };
-
   const handleCancelAppointment = async (appointmentId: string) => {
     if (!window.confirm('Are you sure you want to cancel this appointment?')) return;
 
     try {
       await api.patch(`/appointments/${appointmentId}/cancel`);
       
-      securityUtils.logSecurityEvent({
-        type: 'DATA_MODIFICATION',
-        details: { action: 'cancel_appointment', appointmentId },
-        severity: 'medium',
-        userId: user?.id
-      });
+      auditLogger.log('DATA_MODIFICATION', true, { 
+        action: 'cancel_appointment', 
+        appointmentId 
+      }, user?.id);
       
       loadAppointments();
     } catch (error) {
       console.error('Failed to cancel appointment:', error);
+      auditLogger.log('DATA_MODIFICATION_ERROR', false, { 
+        action: 'cancel_appointment', 
+        appointmentId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }, user?.id);
     }
   };
 
@@ -142,61 +158,57 @@ const AppointmentHistoryPage: React.FC = () => {
     setShowReviewModal(true);
     setReviewData({ rating: 5, comment: '' });
   };
-
   const submitReview = async () => {
     if (!selectedAppointment) return;
 
     try {
       const sanitizedData = {
         rating: Math.max(1, Math.min(5, reviewData.rating)),
-        comment: securityUtils.sanitizeInput(reviewData.comment),
+        comment: reviewData.comment.trim(),
         appointmentId: selectedAppointment.id,
         doctorId: selectedAppointment.doctor.id
       };
 
       await api.post('/reviews', sanitizedData);
       
-      securityUtils.logSecurityEvent({
-        type: 'DATA_CREATION',
-        details: { 
-          action: 'create_review', 
-          appointmentId: selectedAppointment.id,
-          doctorId: selectedAppointment.doctor.id,
-          rating: sanitizedData.rating
-        },
-        severity: 'low',
-        userId: user?.id
-      });
+      auditLogger.log('DATA_CREATION', true, { 
+        action: 'create_review', 
+        appointmentId: selectedAppointment.id,
+        doctorId: selectedAppointment.doctor.id,
+        rating: sanitizedData.rating
+      }, user?.id);
 
       setShowReviewModal(false);
       loadAppointments();
     } catch (error) {
       console.error('Failed to submit review:', error);
+      auditLogger.log('DATA_CREATION_ERROR', false, { 
+        action: 'create_review', 
+        appointmentId: selectedAppointment?.id,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }, user?.id);
     }
   };
-
   const getStatusBadge = (status: string) => {
-    const statusClasses = {
+    const statusClasses: Record<string, string> = {
       scheduled: 'status-scheduled',
       confirmed: 'status-confirmed',
       completed: 'status-completed',
       cancelled: 'status-cancelled',
-      no_show: 'status-no-show'
+      no_show: 'status-no-show',
+      pending: 'status-scheduled'
     };
     
+    const normalizedStatus = normalizeStatus(status);
+    
     return (
-      <span className={`status-badge ${statusClasses[status.toLowerCase()] || 'status-default'}`}>
+      <span className={`status-badge ${statusClasses[normalizedStatus] || 'status-default'}`}>
         {status.replace('_', ' ').charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
       </span>
     );
   };
-
   const formatDateTime = (date: string) => {
     return new Date(date).toLocaleString();
-  };
-
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString();
   };
 
   const handleFilterChange = (key: keyof AppointmentFilters, value: string) => {
@@ -211,26 +223,36 @@ const AppointmentHistoryPage: React.FC = () => {
       doctorId: ''
     });
   };
-
   const canCancelAppointment = (appointment: AppointmentWithDoctor) => {
-    const appointmentDate = new Date(appointment.appointmentDate);
+    const appointmentDateStr = getAppointmentDate(appointment);
+    if (!appointmentDateStr) return false;
+    
+    const appointmentDate = new Date(appointmentDateStr);
     const now = new Date();
     const timeDiff = appointmentDate.getTime() - now.getTime();
     const hoursDiff = timeDiff / (1000 * 3600);
     
     return (
-      (appointment.status === 'scheduled' || appointment.status === 'confirmed') &&
+      (normalizeStatus(appointment.status) === 'scheduled' || normalizeStatus(appointment.status) === 'confirmed') &&
       hoursDiff > 24 // Can cancel if more than 24 hours away
     );
   };
 
   const canReschedule = (appointment: AppointmentWithDoctor) => {
     return canCancelAppointment(appointment);
+  };  const canLeaveReview = (appointment: AppointmentWithDoctor) => {
+    return normalizeStatus(appointment.status) === 'completed' && !appointment.hasReview;
   };
 
-  const canLeaveReview = (appointment: AppointmentWithDoctor) => {
-    return appointment.status === 'completed' && !appointment.hasReview;
-  };
+  // Load appointments on component mount
+  useEffect(() => {
+    loadAppointments();
+  }, [loadAppointments]);
+
+  // Apply filters whenever appointments or filters change
+  useEffect(() => {
+    applyFilters();
+  }, [applyFilters]);
 
   if (loading) {
     return (
@@ -240,30 +262,28 @@ const AppointmentHistoryPage: React.FC = () => {
       </div>
     );
   }
-
   const uniqueDoctors = Array.from(
     new Set(appointments.map(a => a.doctor.id))
-  ).map(id => appointments.find(a => a.doctor.id === id)?.doctor).filter(Boolean);
+  ).map(id => appointments.find(a => a.doctor.id === id)?.doctor).filter((doctor): doctor is Doctor => Boolean(doctor));
 
   return (
     <div className="appointment-history-page">
       <div className="page-header">
-        <h1>Appointment History</h1>
-        <div className="stats-summary">
+        <h1>Appointment History</h1>        <div className="stats-summary">
           <div className="stat-item">
             <span className="stat-number">{appointments.length}</span>
             <span className="stat-label">Total Appointments</span>
           </div>
           <div className="stat-item">
-            <span className="stat-number">{appointments.filter(a => a.status === 'completed').length}</span>
+            <span className="stat-number">{appointments.filter(a => normalizeStatus(a.status) === 'completed').length}</span>
             <span className="stat-label">Completed</span>
           </div>
           <div className="stat-item">
-            <span className="stat-number">{appointments.filter(a => a.status === 'scheduled' || a.status === 'confirmed').length}</span>
+            <span className="stat-number">{appointments.filter(a => normalizeStatus(a.status) === 'scheduled' || normalizeStatus(a.status) === 'confirmed').length}</span>
             <span className="stat-label">Upcoming</span>
           </div>
           <div className="stat-item">
-            <span className="stat-number">{appointments.filter(a => a.status === 'cancelled').length}</span>
+            <span className="stat-number">{appointments.filter(a => normalizeStatus(a.status) === 'cancelled').length}</span>
             <span className="stat-label">Cancelled</span>
           </div>
         </div>
@@ -287,10 +307,9 @@ const AppointmentHistoryPage: React.FC = () => {
             value={filters.doctorId}
             onChange={(e) => handleFilterChange('doctorId', e.target.value)}
           >
-            <option value="">All Doctors</option>
-            {uniqueDoctors.map((doctor) => (
+            <option value="">All Doctors</option>            {uniqueDoctors.map((doctor) => (
               <option key={doctor.id} value={doctor.id}>
-                Dr. {doctor.name} - {doctor.specialization}
+                Dr. {doctor.name} - {getSpecializationName(doctor.specialization)}
               </option>
             ))}
           </select>
@@ -339,10 +358,9 @@ const AppointmentHistoryPage: React.FC = () => {
                 <div className="doctor-info">
                   <div className="doctor-avatar">
                     <i className="fas fa-user-md"></i>
-                  </div>
-                  <div className="doctor-details">
+                  </div>                  <div className="doctor-details">
                     <h3>Dr. {appointment.doctor.name}</h3>
-                    <p>{appointment.doctor.specialization}</p>
+                    <p>{getSpecializationName(appointment.doctor.specialization)}</p>
                     {appointment.doctor.hospital && (
                       <p className="hospital">{appointment.doctor.hospital}</p>
                     )}
@@ -353,10 +371,9 @@ const AppointmentHistoryPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="appointment-details">
-                <div className="appointment-time">
+              <div className="appointment-details">                <div className="appointment-time">
                   <i className="fas fa-calendar-alt"></i>
-                  <span>{formatDateTime(appointment.appointmentDate)}</span>
+                  <span>{formatDateTime(getAppointmentDate(appointment) || '')}</span>
                 </div>
                 {appointment.appointmentType && (
                   <div className="appointment-type">
@@ -434,10 +451,9 @@ const AppointmentHistoryPage: React.FC = () => {
                 <div className="doctor-section">
                   <div className="doctor-avatar large">
                     <i className="fas fa-user-md"></i>
-                  </div>
-                  <div className="doctor-info">
+                  </div>                  <div className="doctor-info">
                     <h3>Dr. {selectedAppointment.doctor.name}</h3>
-                    <p>{selectedAppointment.doctor.specialization}</p>
+                    <p>{getSpecializationName(selectedAppointment.doctor.specialization)}</p>
                     {selectedAppointment.doctor.hospital && (
                       <p className="hospital">{selectedAppointment.doctor.hospital}</p>
                     )}
@@ -451,10 +467,9 @@ const AppointmentHistoryPage: React.FC = () => {
                   <div className="info-item">
                     <label>Status:</label>
                     {getStatusBadge(selectedAppointment.status)}
-                  </div>
-                  <div className="info-item">
+                  </div>                  <div className="info-item">
                     <label>Date & Time:</label>
-                    <span>{formatDateTime(selectedAppointment.appointmentDate)}</span>
+                    <span>{formatDateTime(getAppointmentDate(selectedAppointment) || '')}</span>
                   </div>
                   {selectedAppointment.appointmentType && (
                     <div className="info-item">
@@ -512,11 +527,10 @@ const AppointmentHistoryPage: React.FC = () => {
             </div>
 
             <div className="modal-body">
-              <div className="review-form">
-                <div className="doctor-info">
+              <div className="review-form">                <div className="doctor-info">
                   <h3>Dr. {selectedAppointment.doctor.name}</h3>
-                  <p>{selectedAppointment.doctor.specialization}</p>
-                  <p>Appointment: {formatDateTime(selectedAppointment.appointmentDate)}</p>
+                  <p>{getSpecializationName(selectedAppointment.doctor.specialization)}</p>
+                  <p>Appointment: {formatDateTime(getAppointmentDate(selectedAppointment) || '')}</p>
                 </div>
 
                 <div className="rating-section">

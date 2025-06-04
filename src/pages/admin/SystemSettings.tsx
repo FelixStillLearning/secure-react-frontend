@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Settings,
   Save,
@@ -20,19 +20,11 @@ import {
   AlertTriangle,
   Info,
   Lock,
-  Unlock,
-  Clock,
-  Mail,
-  Phone,
-  Key,
-  Server,
-  Cloud,
   HardDrive,
-  Monitor,
   Palette
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { securityUtils } from '../../utils/security';
+import { auditLogger } from '../../utils/security';
 import { apiClient } from '../../api/axios.config';
 
 interface SystemConfig {
@@ -194,8 +186,7 @@ type SettingsTab = 'general' | 'authentication' | 'notifications' | 'appointment
 
 const SystemSettings: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
-  const [config, setConfig] = useState<SystemConfig | null>(null);
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');  const [config, setConfig] = useState<SystemConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -204,35 +195,27 @@ const SystemSettings: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [unsavedChanges, setUnsavedChanges] = useState(false);
   const [testResults, setTestResults] = useState<Record<string, boolean>>({});
-
-  // Load system configuration
-  useEffect(() => {
-    loadSystemConfig();
-  }, []);
-
-  const loadSystemConfig = async () => {
+  const loadSystemConfig = useCallback(async () => {
     try {
       setLoading(true);
       const response = await apiClient.get('/admin/system/config');
       setConfig(response.data);
       
-      securityUtils.logSecurityEvent({
-        type: 'admin_action',
-        severity: 'info',
-        message: 'Admin accessed system settings',
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
-      });
+      auditLogger.log('ADMIN_ACCESS_SYSTEM_SETTINGS', true, { 
+        message: 'Admin accessed system settings'
+      }, user?.id);
     } catch (err) {
       setError('Failed to load system configuration');
       console.error('Failed to load system config:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
+
+  // Load system configuration
+  useEffect(() => {
+    loadSystemConfig();
+  }, [loadSystemConfig]);
 
   const handleConfigChange = (section: keyof SystemConfig, field: string, value: any) => {
     if (!config) return;
@@ -265,17 +248,9 @@ const SystemSettings: React.FC = () => {
       
       setSuccess('System configuration updated successfully');
       setUnsavedChanges(false);
-      
-      securityUtils.logSecurityEvent({
-        type: 'admin_action',
-        severity: 'warning',
-        message: `Admin updated system configuration - Tab: ${activeTab}`,
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
-      });
+        auditLogger.log('ADMIN_UPDATE_SYSTEM_CONFIG', true, { 
+        message: `Admin updated system configuration - Tab: ${activeTab}`
+      }, user?.id);
     } catch (err) {
       setError('Failed to save configuration');
       console.error('Failed to save config:', err);
@@ -297,19 +272,12 @@ const SystemSettings: React.FC = () => {
       if (response.data.success) {
         setSuccess(`${testType} test passed successfully`);
       } else {
-        setError(`${testType} test failed: ${response.data.message}`);
-      }
+        setError(`${testType} test failed: ${response.data.message}`);      }
       
-      securityUtils.logSecurityEvent({
-        type: 'admin_action',
-        severity: 'info',
-        message: `Admin tested configuration: ${testType}`,
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
-      });
+      auditLogger.log('ADMIN_TEST_CONFIGURATION', response.data.success, { 
+        testType,
+        message: `Admin tested configuration: ${testType}`
+      }, user?.id);
     } catch (err) {
       setError(`Failed to test ${testType} configuration`);
       setTestResults(prev => ({
@@ -338,17 +306,9 @@ const SystemSettings: React.FC = () => {
       window.URL.revokeObjectURL(url);
       
       setSuccess('Configuration exported successfully');
-      
-      securityUtils.logSecurityEvent({
-        type: 'admin_action',
-        severity: 'warning',
-        message: 'Admin exported system configuration',
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
-      });
+        auditLogger.log('ADMIN_EXPORT_CONFIG', true, { 
+        message: 'Admin exported system configuration'
+      }, user?.id);
     } catch (err) {
       setError('Failed to export configuration');
     }
@@ -368,17 +328,10 @@ const SystemSettings: React.FC = () => {
       setConfig(response.data);
       setSuccess('Configuration imported successfully');
       setUnsavedChanges(true);
-      
-      securityUtils.logSecurityEvent({
-        type: 'admin_action',
-        severity: 'critical',
+        auditLogger.log('ADMIN_IMPORT_CONFIG', true, { 
         message: 'Admin imported system configuration',
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
-      });
+        fileName: file.name
+      }, user?.id);
     } catch (err) {
       setError('Failed to import configuration');
     }
@@ -388,17 +341,9 @@ const SystemSettings: React.FC = () => {
     try {
       await apiClient.post('/admin/system/backup/manual');
       setSuccess('Manual backup initiated successfully');
-      
-      securityUtils.logSecurityEvent({
-        type: 'admin_action',
-        severity: 'warning',
-        message: 'Admin initiated manual backup',
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
-      });
+        auditLogger.log('ADMIN_CREATE_BACKUP', true, { 
+        message: 'Admin initiated manual backup'
+      }, user?.id);
     } catch (err) {
       setError('Failed to initiate backup');
     }

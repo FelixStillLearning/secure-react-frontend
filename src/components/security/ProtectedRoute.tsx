@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { SecurityUtils } from '../../utils/security';
+import { SecurityUtils } from '../../utils/SecurityUtils';
 import { UserRole } from '../../types/auth.types';
 
 interface ProtectedRouteProps {
@@ -19,12 +19,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { user, isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
-
+  // All hooks must be called before any conditional returns
   useEffect(() => {
     // Log route access attempts for security auditing
     SecurityUtils.logSecurityEvent({
-      event: 'route_access_attempt',
-      data: {
+      action: 'route_access_attempt',
+      success: true,
+      details: {
         path: location.pathname,
         userRole: user?.role,
         isAuthenticated,
@@ -32,85 +33,21 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         timestamp: new Date().toISOString(),
         userAgent: navigator.userAgent,
         ip: 'client-side' // Will be logged on backend
-      }
-    });
-  }, [location.pathname, user?.role, isAuthenticated, requiredRoles]);
-
-  // Show loading while checking authentication
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
-  // Guest-only routes (login, register)
-  if (guestOnly && isAuthenticated) {
-    const redirectPath = user?.role === 'ADMIN' ? '/admin/dashboard' :
-                        user?.role === 'DOCTOR' ? '/doctor/dashboard' :
-                        '/patient/dashboard';
-    
-    SecurityUtils.logSecurityEvent({
-      event: 'guest_route_access_denied',
-      data: {
-        path: location.pathname,
-        userRole: user?.role,
-        redirectTo: redirectPath
-      }
+      },
+      userId: user?.id
     });
 
-    return <Navigate to={redirectPath} replace />;
-  }
-
-  // Protected routes requiring authentication
-  if (requireAuth && !isAuthenticated) {
-    SecurityUtils.logSecurityEvent({
-      event: 'unauthenticated_access_denied',
-      data: {
-        path: location.pathname,
-        attemptedAccess: new Date().toISOString()
-      }
-    });
-
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  // Role-based access control
-  if (isAuthenticated && requiredRoles.length > 0) {
-    const hasRequiredRole = requiredRoles.includes(user?.role as UserRole);
-    
-    if (!hasRequiredRole) {
-      SecurityUtils.logSecurityEvent({
-        event: 'unauthorized_role_access',
-        data: {
-          path: location.pathname,
-          userRole: user?.role,
-          requiredRoles,
-          severity: 'HIGH'
-        }
-      });
-
-      // Redirect to appropriate dashboard based on user role
-      const redirectPath = user?.role === 'ADMIN' ? '/admin/dashboard' :
-                          user?.role === 'DOCTOR' ? '/doctor/dashboard' :
-                          '/patient/dashboard';
-
-      return <Navigate to={redirectPath} replace />;
-    }
-  }
-
-  // Additional security checks
-  useEffect(() => {
     // Check for session tampering
     if (isAuthenticated && !SecurityUtils.validateSession()) {
       SecurityUtils.logSecurityEvent({
-        event: 'session_tampering_detected',
-        data: {
+        action: 'session_tampering_detected',
+        success: false,
+        details: {
           path: location.pathname,
           userRole: user?.role,
           severity: 'CRITICAL'
-        }
+        },
+        userId: user?.id
       });
       
       // Force logout on session tampering
@@ -121,8 +58,71 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     // Update user activity
     if (isAuthenticated) {
       SecurityUtils.updateUserActivity();
+    }  }, [location.pathname, user?.role, isAuthenticated, requiredRoles, user?.id]);
+
+  // Show loading while checking authentication
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+  // Guest-only routes (login, register)
+  if (guestOnly && isAuthenticated) {
+    const redirectPath = user?.role === UserRole.ADMIN ? '/admin/dashboard' :
+                        user?.role === UserRole.DOCTOR ? '/doctor/dashboard' :
+                        '/patient/dashboard';
+    
+    SecurityUtils.logSecurityEvent({
+      action: 'guest_route_access_denied',
+      success: false,
+      details: {
+        path: location.pathname,
+        userRole: user?.role,
+        redirectTo: redirectPath
+      },
+      userId: user?.id
+    });
+
+    return <Navigate to={redirectPath} replace />;
+  }
+  // Protected routes requiring authentication
+  if (requireAuth && !isAuthenticated) {
+    SecurityUtils.logSecurityEvent({
+      action: 'unauthenticated_access_denied',
+      success: false,
+      details: {
+        path: location.pathname,
+        attemptedAccess: new Date().toISOString()
+      }
+    });
+
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  // Role-based access control
+  if (isAuthenticated && requiredRoles.length > 0) {
+    const hasRequiredRole = requiredRoles.includes(user?.role as UserRole);
+    
+    if (!hasRequiredRole) {
+      SecurityUtils.logSecurityEvent({
+        action: 'unauthorized_role_access',
+        success: false,
+        details: {
+          path: location.pathname,
+          userRole: user?.role,
+          requiredRoles,
+          severity: 'HIGH'
+        },
+        userId: user?.id
+      });
+
+      // Redirect to appropriate dashboard based on user role
+      const redirectPath = user?.role === UserRole.ADMIN ? '/admin/dashboard' :
+                          user?.role === UserRole.DOCTOR ? '/doctor/dashboard' :
+                          '/patient/dashboard';      return <Navigate to={redirectPath} replace />;
     }
-  }, [isAuthenticated, user, location.pathname]);
+  }
 
   return <>{children}</>;
 };

@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { securityUtils } from '../../utils/security';
-import { api } from '../../api/axios.config';
-import { User, Doctor, Patient } from '../../types/auth.types';
+import { auditLogger } from '../../utils/security';
+import { apiClient } from '../../api/axios.config';
+import { User, Doctor, Patient, Specialization } from '../../types/auth.types';
 
 interface UserWithDetails extends User {
-  lastLogin?: Date;
-  createdAt: Date;
+  lastLogin?: string; // Keep as string to match base User interface
+  createdAt: string; // Change from Date to string for consistency
   isActive: boolean;
   doctorProfile?: Doctor;
   patientProfile?: Patient;
@@ -20,6 +20,14 @@ interface UserFilters {
   sortOrder: 'asc' | 'desc';
 }
 
+// Helper function to safely display specialization
+const getSpecializationName = (specialization: string | Specialization): string => {
+  if (typeof specialization === 'string') {
+    return specialization;
+  }
+  return specialization?.name || 'Unknown';
+};
+
 const UserManagementPage: React.FC = () => {
   const { user } = useAuth();
   const [users, setUsers] = useState<UserWithDetails[]>([]);
@@ -27,58 +35,39 @@ const UserManagementPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<UserWithDetails | null>(null);
   const [showUserModal, setShowUserModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
-  const [filters, setFilters] = useState<UserFilters>({
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);  const [filters, setFilters] = useState<UserFilters>({
     search: '',
     role: 'all',
     status: 'all',
     sortBy: 'createdAt',
     sortOrder: 'desc'
-  });
-
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [users, filters]);
-
-  const loadUsers = async () => {
+  });const loadUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get('/admin/users');
+      const response = await apiClient.get('/admin/users');
       setUsers(response.data);
       
-      securityUtils.logSecurityEvent({
-        type: 'ADMIN_ACTION',
-        details: { action: 'view_user_management', userCount: response.data.length },
-        severity: 'low',
-        userId: user?.id
-      });
+      auditLogger.log('view_user_management', true, { 
+        userCount: response.data.length 
+      }, user?.id);
     } catch (error) {
       console.error('Failed to load users:', error);
-      securityUtils.logSecurityEvent({
-        type: 'DATA_ACCESS_ERROR',
-        details: { action: 'load_users', error: error.message },
-        severity: 'high',
-        userId: user?.id
-      });
+      auditLogger.log('load_users_error', false, { 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      }, user?.id);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
 
-  const applyFilters = () => {
-    let filtered = [...users];
-
-    // Search filter
+  const applyFilters = useCallback(() => {
+    let filtered = [...users];    // Search filter
     if (filters.search) {
       const searchTerm = filters.search.toLowerCase();
       filtered = filtered.filter(user => 
-        user.name.toLowerCase().includes(searchTerm) ||
         user.email.toLowerCase().includes(searchTerm) ||
-        user.phone?.toLowerCase().includes(searchTerm)
+        (user.profile?.firstName + ' ' + user.profile?.lastName).toLowerCase().includes(searchTerm) ||
+        user.profile?.phone?.toLowerCase().includes(searchTerm)
       );
     }
 
@@ -100,10 +89,9 @@ const UserManagementPage: React.FC = () => {
     filtered.sort((a, b) => {
       let aValue: any, bValue: any;
       
-      switch (filters.sortBy) {
-        case 'name':
-          aValue = a.name.toLowerCase();
-          bValue = b.name.toLowerCase();
+      switch (filters.sortBy) {        case 'name':
+          aValue = (a.profile?.firstName + ' ' + a.profile?.lastName).toLowerCase();
+          bValue = (b.profile?.firstName + ' ' + b.profile?.lastName).toLowerCase();
           break;
         case 'email':
           aValue = a.email.toLowerCase();
@@ -129,37 +117,25 @@ const UserManagementPage: React.FC = () => {
       if (aValue < bValue) return filters.sortOrder === 'asc' ? -1 : 1;
       if (aValue > bValue) return filters.sortOrder === 'asc' ? 1 : -1;
       return 0;
-    });
-
-    setFilteredUsers(filtered);
-  };
-
+    });    setFilteredUsers(filtered);
+  }, [users, filters]);
   const handleUserClick = (user: UserWithDetails) => {
     setSelectedUser(user);
     setShowUserModal(true);
     
-    securityUtils.logSecurityEvent({
-      type: 'ADMIN_ACTION',
-      details: { action: 'view_user_details', targetUserId: user.id },
-      severity: 'low',
-      userId: user?.id
-    });
+    auditLogger.log('view_user_details', true, { 
+      targetUserId: user.id 
+    }, user?.id);
   };
 
   const handleToggleUserStatus = async (userId: string, currentStatus: boolean) => {
     try {
-      await api.patch(`/admin/users/${userId}/status`, { isActive: !currentStatus });
+      await apiClient.patch(`/admin/users/${userId}/status`, { isActive: !currentStatus });
       
-      securityUtils.logSecurityEvent({
-        type: 'ADMIN_ACTION',
-        details: { 
-          action: 'toggle_user_status', 
-          targetUserId: userId, 
-          newStatus: !currentStatus 
-        },
-        severity: 'medium',
-        userId: user?.id
-      });
+      auditLogger.log('toggle_user_status', true, { 
+        targetUserId: userId, 
+        newStatus: !currentStatus 
+      }, user?.id);
       
       loadUsers();
     } catch (error) {
@@ -169,14 +145,11 @@ const UserManagementPage: React.FC = () => {
 
   const handleDeleteUser = async (userId: string) => {
     try {
-      await api.delete(`/admin/users/${userId}`);
+      await apiClient.delete(`/admin/users/${userId}`);
       
-      securityUtils.logSecurityEvent({
-        type: 'ADMIN_ACTION',
-        details: { action: 'delete_user', targetUserId: userId },
-        severity: 'high',
-        userId: user?.id
-      });
+      auditLogger.log('delete_user', true, { 
+        targetUserId: userId 
+      }, user?.id);
       
       setShowDeleteConfirm(null);
       loadUsers();
@@ -184,9 +157,8 @@ const UserManagementPage: React.FC = () => {
       console.error('Failed to delete user:', error);
     }
   };
-
   const getRoleBadge = (role: string) => {
-    const roleClasses = {
+    const roleClasses: { [key: string]: string } = {
       admin: 'role-admin',
       doctor: 'role-doctor',
       patient: 'role-patient'
@@ -211,11 +183,19 @@ const UserManagementPage: React.FC = () => {
     if (!date) return 'Never';
     return new Date(date).toLocaleDateString();
   };
-
   const formatDateTime = (date: Date | string | undefined) => {
     if (!date) return 'Never';
     return new Date(date).toLocaleString();
   };
+
+  // Effects
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [applyFilters]);
 
   const handleFilterChange = (key: keyof UserFilters, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -325,11 +305,10 @@ const UserManagementPage: React.FC = () => {
                   <div className="user-info">
                     <div className="user-avatar">
                       <i className="fas fa-user"></i>
-                    </div>
-                    <div className="user-details">
-                      <div className="user-name">{userData.name}</div>
+                    </div>                    <div className="user-details">
+                      <div className="user-name">{userData.profile?.firstName || ''} {userData.profile?.lastName || ''}</div>
                       <div className="user-email">{userData.email}</div>
-                      {userData.phone && <div className="user-phone">{userData.phone}</div>}
+                      {userData.profile?.phone && <div className="user-phone">{userData.profile.phone}</div>}
                     </div>
                   </div>
                 </td>
@@ -389,11 +368,10 @@ const UserManagementPage: React.FC = () => {
                 <div className="user-basic-info">
                   <div className="user-avatar large">
                     <i className="fas fa-user"></i>
-                  </div>
-                  <div className="user-info">
-                    <h3>{selectedUser.name}</h3>
+                  </div>                  <div className="user-info">
+                    <h3>{selectedUser.profile?.firstName || ''} {selectedUser.profile?.lastName || ''}</h3>
                     <p>{selectedUser.email}</p>
-                    {selectedUser.phone && <p>{selectedUser.phone}</p>}
+                    {selectedUser.profile?.phone && <p>{selectedUser.profile.phone}</p>}
                     <div className="badges">
                       {getRoleBadge(selectedUser.role)}
                       {getStatusBadge(selectedUser.isActive)}
@@ -419,18 +397,16 @@ const UserManagementPage: React.FC = () => {
                 {selectedUser.doctorProfile && (
                   <div className="profile-section">
                     <h4>Doctor Profile</h4>
-                    <div className="profile-details">
-                      <div className="detail-item">
+                    <div className="profile-details">                      <div className="detail-item">
                         <label>Specialization:</label>
-                        <span>{selectedUser.doctorProfile.specialization}</span>
+                        <span>{getSpecializationName(selectedUser.doctorProfile.specialization)}</span>
                       </div>
                       <div className="detail-item">
                         <label>License Number:</label>
                         <span>{selectedUser.doctorProfile.licenseNumber}</span>
-                      </div>
-                      <div className="detail-item">
+                      </div>                      <div className="detail-item">
                         <label>Experience:</label>
-                        <span>{selectedUser.doctorProfile.experienceYears} years</span>
+                        <span>{selectedUser.doctorProfile.experience || selectedUser.doctorProfile.experienceYears} years</span>
                       </div>
                       {selectedUser.doctorProfile.education && (
                         <div className="detail-item">
@@ -445,14 +421,13 @@ const UserManagementPage: React.FC = () => {
                 {selectedUser.patientProfile && (
                   <div className="profile-section">
                     <h4>Patient Profile</h4>
-                    <div className="profile-details">
-                      <div className="detail-item">
+                    <div className="profile-details">                      <div className="detail-item">
                         <label>Date of Birth:</label>
-                        <span>{formatDate(selectedUser.patientProfile.dateOfBirth)}</span>
+                        <span>{selectedUser.patientProfile.dateOfBirth ? formatDate(selectedUser.patientProfile.dateOfBirth) : 'Not specified'}</span>
                       </div>
                       <div className="detail-item">
                         <label>Gender:</label>
-                        <span>{selectedUser.patientProfile.gender}</span>
+                        <span>{selectedUser.patientProfile.gender || 'Not specified'}</span>
                       </div>
                       <div className="detail-item">
                         <label>Blood Type:</label>

@@ -1,23 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Calendar, 
-  Clock, 
   User, 
   Search, 
-  Filter, 
   Star,
   MapPin,
   Phone,
-  Mail,
   ChevronLeft,
   ChevronRight,
   AlertCircle,
   CheckCircle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { securityUtils } from '../../utils/security';
+import { auditLogger } from '../../utils/security';
 import { apiClient } from '../../api/axios.config';
-import { Doctor, Specialization, Appointment } from '../../types/auth.types';
+import { Doctor, Specialization } from '../../types/auth.types';
 
 interface TimeSlot {
   time: string;
@@ -45,23 +42,7 @@ const BookAppointment: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [currentWeek, setCurrentWeek] = useState(new Date());
-
-  useEffect(() => {
-    loadSpecializations();
-    loadDoctors();
-  }, []);
-
-  useEffect(() => {
-    filterDoctors();
-  }, [doctors, selectedSpecialization, searchTerm]);
-
-  useEffect(() => {
-    if (selectedDoctor) {
-      loadAvailableSlots();
-    }
-  }, [selectedDoctor, currentWeek]);
+  const [success, setSuccess] = useState<string | null>(null);  const [currentWeek, setCurrentWeek] = useState(new Date());
 
   const loadSpecializations = async () => {
     try {
@@ -84,26 +65,34 @@ const BookAppointment: React.FC = () => {
     }
   };
 
-  const filterDoctors = () => {
+  const filterDoctors = useCallback(() => {
     let filtered = doctors;
 
     if (selectedSpecialization) {
-      filtered = filtered.filter(doctor => 
-        doctor.specialization?.id === selectedSpecialization
-      );
+      filtered = filtered.filter(doctor => {
+        if (typeof doctor.specialization === 'object') {
+          return doctor.specialization?.id === selectedSpecialization;
+        }
+        return doctor.specialization === selectedSpecialization;
+      });
     }
 
     if (searchTerm) {
-      filtered = filtered.filter(doctor =>
-        doctor.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        doctor.specialization?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      filtered = filtered.filter(doctor => {
+        const doctorName = doctor.user?.name || doctor.name || '';
+        const specializationName = typeof doctor.specialization === 'object' 
+          ? doctor.specialization?.name || ''
+          : doctor.specialization || '';
+        
+        return doctorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+               specializationName.toLowerCase().includes(searchTerm.toLowerCase());
+      });
     }
 
     setFilteredDoctors(filtered);
-  };
+  }, [doctors, selectedSpecialization, searchTerm]);
 
-  const loadAvailableSlots = async () => {
+  const loadAvailableSlots = useCallback(async () => {
     if (!selectedDoctor) return;
 
     try {
@@ -120,7 +109,22 @@ const BookAppointment: React.FC = () => {
     } catch (err) {
       console.error('Failed to load available slots:', err);
     }
-  };
+  }, [selectedDoctor, currentWeek]);
+
+  useEffect(() => {
+    loadSpecializations();
+    loadDoctors();
+  }, []);
+
+  useEffect(() => {
+    filterDoctors();
+  }, [filterDoctors]);
+
+  useEffect(() => {
+    if (selectedDoctor) {
+      loadAvailableSlots();
+    }
+  }, [selectedDoctor, loadAvailableSlots]);
 
   const getWeekStart = (date: Date) => {
     const start = new Date(date);
@@ -143,7 +147,6 @@ const BookAppointment: React.FC = () => {
     setSelectedDate('');
     setSelectedTime('');
   };
-
   const handleBooking = async () => {
     if (!selectedDoctor || !selectedDate || !selectedTime) {
       setError('Please select a doctor, date, and time');
@@ -154,38 +157,23 @@ const BookAppointment: React.FC = () => {
       setBookingLoading(true);
       setError(null);
 
-      // Validate and sanitize inputs
-      const sanitizedNotes = securityUtils.sanitizeInput(notes);
-      
       // Create appointment date
       const appointmentDate = new Date(`${selectedDate}T${selectedTime}`);
-      
-      // Rate limiting check
-      const canProceed = await securityUtils.checkRateLimit('appointment_booking', 3, 300); // 3 per 5 minutes
-      if (!canProceed) {
-        throw new Error('Too many booking attempts. Please wait a moment.');
-      }
 
       const appointmentData = {
         doctorId: selectedDoctor.id,
         appointmentDate: appointmentDate.toISOString(),
-        notes: sanitizedNotes,
+        notes: notes,
         status: 'pending'
       };
 
-      const response = await apiClient.post('/appointments', appointmentData);
-
-      // Log successful booking
-      securityUtils.logSecurityEvent({
-        type: 'appointment_booked',
-        severity: 'info',
-        message: `Appointment booked with Dr. ${selectedDoctor.user?.name}`,
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
-      });
+      await apiClient.post('/appointments', appointmentData);      // Log successful booking
+      auditLogger.log(
+        'appointment_booked',
+        true,
+        `Appointment booked with Dr. ${selectedDoctor.user?.name || selectedDoctor.name}`,
+        user?.id
+      );
 
       setSuccess('Appointment booked successfully! You will receive a confirmation email shortly.');
       
@@ -196,22 +184,16 @@ const BookAppointment: React.FC = () => {
       setNotes('');
       
       // Reload available slots
-      loadAvailableSlots();
-
-    } catch (err: any) {
+      loadAvailableSlots();    } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Failed to book appointment';
       setError(errorMessage);
       
-      securityUtils.logSecurityEvent({
-        type: 'appointment_booking_failed',
-        severity: 'warning',
-        message: `Appointment booking failed: ${errorMessage}`,
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
-      });
+      auditLogger.log(
+        'appointment_booking_failed',
+        false,
+        `Appointment booking failed: ${errorMessage}`,
+        user?.id
+      );
     } finally {
       setBookingLoading(false);
     }
@@ -342,12 +324,12 @@ const BookAppointment: React.FC = () => {
                       <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
                         <User className="w-8 h-8 text-blue-600" />
                       </div>
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          Dr. {doctor.user?.name}
-                        </h3>
-                        <p className="text-blue-600 font-medium">
-                          {doctor.specialization?.name}
+                      <div className="flex-1">                        <h3 className="text-lg font-semibold text-gray-900">
+                          Dr. {doctor.user?.name || doctor.name}
+                        </h3><p className="text-blue-600 font-medium">
+                          {typeof doctor.specialization === 'object' 
+                            ? doctor.specialization?.name 
+                            : doctor.specialization}
                         </p>
                         <div className="flex items-center mt-2">
                           {renderStars(doctor.averageRating || 0)}
@@ -387,12 +369,13 @@ const BookAppointment: React.FC = () => {
                     <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
                       <User className="w-6 h-6 text-blue-600" />
                     </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900">
-                        Dr. {selectedDoctor.user?.name}
+                    <div>                      <h3 className="font-medium text-gray-900">
+                        Dr. {selectedDoctor.user?.name || selectedDoctor.name}
                       </h3>
                       <p className="text-sm text-blue-600">
-                        {selectedDoctor.specialization?.name}
+                        {typeof selectedDoctor.specialization === 'object' 
+                          ? selectedDoctor.specialization?.name 
+                          : selectedDoctor.specialization}
                       </p>
                     </div>
                   </div>

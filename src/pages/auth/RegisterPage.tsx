@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { SecurityUtils } from '../../utils/SecurityUtils';
 import { RegisterData } from '../../types/auth.types';
 import * as Yup from 'yup';
+import { UserRole } from '../../types/auth.types';
 
 // Enhanced validation schema
 const registerSchema = Yup.object({
@@ -55,7 +56,7 @@ const RegisterPage: React.FC = () => {
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'PATIENT',
+    role: UserRole.PATIENT,
     profile: {
       firstName: '',
       lastName: '',

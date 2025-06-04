@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Plus, 
   Search, 
-  Filter, 
   Edit3, 
   Trash2, 
   Users, 
   Eye,
   MoreVertical,
   Download,
-  Upload,
   Settings,
   TrendingUp,
   CheckCircle,
@@ -17,7 +15,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { securityUtils } from '../../utils/security';
+import { auditLogger } from '../../utils/security';
 import { apiClient } from '../../api/axios.config';
 
 interface Specialization {
@@ -72,28 +70,18 @@ const SpecializationManagement: React.FC = () => {
     totalDoctors: 0,
     totalAppointments: 0
   });
-
-  useEffect(() => {
-    loadSpecializations();
-    loadStats();
-  }, []);
-
-  const loadSpecializations = async () => {
+  const loadSpecializations = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
       // Log admin action
-      securityUtils.logSecurityEvent({
-        type: 'admin_action',
-        severity: 'info',
-        message: 'Admin accessed specialization management',
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
-      });
+      auditLogger.log(
+        'specialization_management_accessed',
+        true,
+        'Admin accessed specialization management',
+        user?.id
+      );
 
       const response = await apiClient.get('/admin/specializations');
       setSpecializations(response.data);
@@ -101,20 +89,21 @@ const SpecializationManagement: React.FC = () => {
       const errorMessage = err.response?.data?.message || 'Failed to load specializations';
       setError(errorMessage);
       
-      securityUtils.logSecurityEvent({
-        type: 'admin_error',
-        severity: 'error',
-        message: `Specialization management load failed: ${errorMessage}`,
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
-      });
+      auditLogger.log(
+        'specialization_management_load_failed',
+        false,
+        `Specialization management load failed: ${errorMessage}`,
+        user?.id
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    loadSpecializations();
+    loadStats();
+  }, [loadSpecializations]);
 
   const loadStats = async () => {
     try {
@@ -135,34 +124,24 @@ const SpecializationManagement: React.FC = () => {
       const specializationData = {
         ...formData,
         tags: formData.tags.filter(tag => tag.trim() !== '')
-      };
-
-      if (editingSpecialization) {
+      };      if (editingSpecialization) {
         await apiClient.put(`/admin/specializations/${editingSpecialization.id}`, specializationData);
         
-        securityUtils.logSecurityEvent({
-          type: 'admin_action',
-          severity: 'info',
-          message: `Admin updated specialization: ${formData.name}`,
-          userId: user?.id,
-          userAgent: navigator.userAgent,
-          timestamp: new Date(),
-          ipAddress: 'client-side',
-          sessionId: securityUtils.getSessionId() || 'unknown'
-        });
+        auditLogger.log(
+          'specialization_updated',
+          true,
+          `Admin updated specialization: ${formData.name}`,
+          user?.id
+        );
       } else {
         await apiClient.post('/admin/specializations', specializationData);
         
-        securityUtils.logSecurityEvent({
-          type: 'admin_action',
-          severity: 'info',
-          message: `Admin created specialization: ${formData.name}`,
-          userId: user?.id,
-          userAgent: navigator.userAgent,
-          timestamp: new Date(),
-          ipAddress: 'client-side',
-          sessionId: securityUtils.getSessionId() || 'unknown'
-        });
+        auditLogger.log(
+          'specialization_created',
+          true,
+          `Admin created specialization: ${formData.name}`,
+          user?.id
+        );
       }
 
       // Reset form and reload data
@@ -202,19 +181,14 @@ const SpecializationManagement: React.FC = () => {
   const handleDelete = async (specializationId: string) => {
     try {
       setLoading(true);
+        await apiClient.delete(`/admin/specializations/${specializationId}`);
       
-      await apiClient.delete(`/admin/specializations/${specializationId}`);
-      
-      securityUtils.logSecurityEvent({
-        type: 'admin_action',
-        severity: 'warning',
-        message: `Admin deleted specialization: ${specializationId}`,
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
-      });
+      auditLogger.log(
+        'specialization_deleted',
+        true,
+        `Admin deleted specialization: ${specializationId}`,
+        user?.id
+      );
 
       await loadSpecializations();
       await loadStats();
@@ -226,23 +200,18 @@ const SpecializationManagement: React.FC = () => {
       setLoading(false);
     }
   };
-
   const handleToggleStatus = async (specializationId: string, currentStatus: boolean) => {
     try {
       await apiClient.patch(`/admin/specializations/${specializationId}/status`, {
         isActive: !currentStatus
       });
       
-      securityUtils.logSecurityEvent({
-        type: 'admin_action',
-        severity: 'info',
-        message: `Admin ${!currentStatus ? 'activated' : 'deactivated'} specialization: ${specializationId}`,
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
-      });
+      auditLogger.log(
+        'specialization_status_changed',
+        true,
+        `Admin ${!currentStatus ? 'activated' : 'deactivated'} specialization: ${specializationId}`,
+        user?.id
+      );
 
       await loadSpecializations();
       await loadStats();
@@ -258,19 +227,14 @@ const SpecializationManagement: React.FC = () => {
       
       await apiClient.patch('/admin/specializations/bulk-status', {
         specializationIds: selectedSpecializations,
-        isActive: status
-      });
+        isActive: status      });
       
-      securityUtils.logSecurityEvent({
-        type: 'admin_action',
-        severity: 'info',
-        message: `Admin bulk ${status ? 'activated' : 'deactivated'} ${selectedSpecializations.length} specializations`,
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
-      });
+      auditLogger.log(
+        'specializations_bulk_status_changed',
+        true,
+        `Admin bulk ${status ? 'activated' : 'deactivated'} ${selectedSpecializations.length} specializations`,
+        user?.id
+      );
 
       setSelectedSpecializations([]);
       await loadSpecializations();
@@ -296,19 +260,14 @@ const SpecializationManagement: React.FC = () => {
       link.download = `specializations_${new Date().toISOString().split('T')[0]}.csv`;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);      window.URL.revokeObjectURL(url);
       
-      securityUtils.logSecurityEvent({
-        type: 'admin_action',
-        severity: 'info',
-        message: 'Admin exported specializations data',
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
-      });
+      auditLogger.log(
+        'specializations_data_exported',
+        true,
+        'Admin exported specializations data',
+        user?.id
+      );
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Failed to export data';
       setError(errorMessage);

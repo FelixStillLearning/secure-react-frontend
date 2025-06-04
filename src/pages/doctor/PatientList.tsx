@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { securityUtils } from '../../utils/security';
-import { api } from '../../api/axios.config';
+import { auditLogger } from '../../utils/security';
+import { apiClient } from '../../api/axios.config';
 import { Patient, Appointment } from '../../types/auth.types';
 
 interface PatientFilters {
@@ -43,11 +43,10 @@ const PatientListPage: React.FC = () => {
   const loadPatients = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/doctors/patients');
-      setPatients(response.data);
-    } catch (error) {
+      const response = await apiClient.get('/doctors/patients');
+      setPatients(response.data);    } catch (error) {
       console.error('Failed to load patients:', error);
-      securityUtils.logSecurityEvent({
+      auditLogger({
         type: 'DATA_ACCESS_ERROR',
         details: { action: 'load_doctor_patients', error: error.message },
         severity: 'medium',

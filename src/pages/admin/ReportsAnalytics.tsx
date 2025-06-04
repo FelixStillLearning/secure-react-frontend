@@ -17,7 +17,6 @@ import {
   Area
 } from 'recharts';
 import {
-  Calendar,
   Download,
   Filter,
   TrendingUp,
@@ -25,18 +24,13 @@ import {
   Calendar as CalendarIcon,
   DollarSign,
   Clock,
-  AlertTriangle,
   FileText,
   BarChart3,
-  PieChart as PieChartIcon,
   Activity,
   RefreshCw,
-  Search,
-  ChevronDown,
-  Mail,
-  Phone
+  ChevronDown
 } from 'lucide-react';
-import { logSecurityEvent, validateInput } from '../../utils/security';
+import { auditLogger } from '../../utils/security';
 
 interface ReportMetrics {
   totalAppointments: number;
@@ -174,8 +168,7 @@ const ReportsAnalytics: React.FC = () => {
   const handleFilterChange = (newFilter: Partial<ReportFilter>) => {
     const updatedFilter = { ...filter, ...newFilter };
     setFilter(updatedFilter);
-    
-    logSecurityEvent('admin', 'report_filter_changed', {
+      auditLogger.log('report_filter_changed', true, {
       reportType: updatedFilter.reportType,
       timeFilter: updatedFilter.timeFilter
     });
@@ -195,8 +188,7 @@ const ReportsAnalytics: React.FC = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-      logSecurityEvent('admin', 'report_exported', {
+        auditLogger.log('report_exported', true, {
         format,
         reportType: filter.reportType
       });

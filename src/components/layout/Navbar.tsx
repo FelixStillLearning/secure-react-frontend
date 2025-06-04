@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { SecurityUtils } from '../../utils/security';
+import { SecurityUtils } from '../../utils/SecurityUtils';
 import { Link, useNavigate } from 'react-router-dom';
 
 const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications] = useState<any[]>([]);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -28,14 +28,14 @@ const Navbar: React.FC = () => {
   }, []);
 
   const handleLogout = async () => {
-    try {
-      SecurityUtils.logSecurityEvent({
-        event: 'user_logout_initiated',
-        data: {
-          userId: user?.id,
+    try {      SecurityUtils.logSecurityEvent({
+        action: 'user_logout_initiated',
+        success: true,
+        details: {
           timestamp: new Date().toISOString(),
           userAgent: navigator.userAgent
-        }
+        },
+        userId: user?.id
       });
 
       await logout();
@@ -119,11 +119,10 @@ const Navbar: React.FC = () => {
                   <span className="text-sm font-medium text-gray-700">
                     {user?.profile?.firstName?.[0] || user?.email?.[0]?.toUpperCase()}
                   </span>
-                </div>
-                <div className="ml-3 text-left">
+                </div>                <div className="ml-3 text-left">
                   <p className="text-sm font-medium text-gray-900">
                     {user?.profile?.firstName && user?.profile?.lastName 
-                      ? `${user.profile.firstName} ${user.profile.lastName}`
+                      ? `${user?.profile?.firstName} ${user?.profile?.lastName}`
                       : user?.email
                     }
                   </p>

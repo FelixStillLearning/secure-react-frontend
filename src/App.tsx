@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './components/notifications/NotificationSystem';
 import ProtectedRoute from './components/security/ProtectedRoute';
+import { UserRole } from './types/auth.types';
 
 // Import pages
 import LoginPage from './pages/auth/LoginPage';
@@ -89,7 +90,7 @@ const App: React.FC = () => {
               <Route
                 path="/patient/dashboard"
                 element={
-                  <ProtectedRoute requiredRoles={['PATIENT']}>
+                  <ProtectedRoute requiredRoles={[UserRole.PATIENT]}>
                     <MainLayout>
                       <PatientDashboard />
                     </MainLayout>
@@ -99,7 +100,7 @@ const App: React.FC = () => {
               <Route
                 path="/patient/profile"
                 element={
-                  <ProtectedRoute requiredRoles={['PATIENT']}>
+                  <ProtectedRoute requiredRoles={[UserRole.PATIENT]}>
                     <MainLayout>
                       <PatientProfile />
                     </MainLayout>
@@ -109,7 +110,7 @@ const App: React.FC = () => {
               <Route
                 path="/patient/book-appointment"
                 element={
-                  <ProtectedRoute requiredRoles={['PATIENT']}>
+                  <ProtectedRoute requiredRoles={[UserRole.PATIENT]}>
                     <MainLayout>
                       <BookAppointment />
                     </MainLayout>
@@ -119,7 +120,7 @@ const App: React.FC = () => {
               <Route
                 path="/patient/appointments"
                 element={
-                  <ProtectedRoute requiredRoles={['PATIENT']}>
+                  <ProtectedRoute requiredRoles={[UserRole.PATIENT]}>
                     <MainLayout>
                       <AppointmentHistory />
                     </MainLayout>
@@ -131,7 +132,7 @@ const App: React.FC = () => {
               <Route
                 path="/doctor/dashboard"
                 element={
-                  <ProtectedRoute requiredRoles={['DOCTOR']}>
+                  <ProtectedRoute requiredRoles={[UserRole.DOCTOR]}>
                     <MainLayout>
                       <DoctorDashboard />
                     </MainLayout>
@@ -141,7 +142,7 @@ const App: React.FC = () => {
               <Route
                 path="/doctor/schedule"
                 element={
-                  <ProtectedRoute requiredRoles={['DOCTOR']}>
+                  <ProtectedRoute requiredRoles={[UserRole.DOCTOR]}>
                     <MainLayout>
                       <DoctorSchedule />
                     </MainLayout>
@@ -151,7 +152,7 @@ const App: React.FC = () => {
               <Route
                 path="/doctor/patients"
                 element={
-                  <ProtectedRoute requiredRoles={['DOCTOR']}>
+                  <ProtectedRoute requiredRoles={[UserRole.DOCTOR]}>
                     <MainLayout>
                       <PatientList />
                     </MainLayout>
@@ -163,7 +164,7 @@ const App: React.FC = () => {
               <Route
                 path="/admin/dashboard"
                 element={
-                  <ProtectedRoute requiredRoles={['ADMIN']}>
+                  <ProtectedRoute requiredRoles={[UserRole.ADMIN]}>
                     <MainLayout>
                       <AdminDashboard />
                     </MainLayout>
@@ -173,7 +174,7 @@ const App: React.FC = () => {
               <Route
                 path="/admin/users"
                 element={
-                  <ProtectedRoute requiredRoles={['ADMIN']}>
+                  <ProtectedRoute requiredRoles={[UserRole.ADMIN]}>
                     <MainLayout>
                       <UserManagement />
                     </MainLayout>
@@ -183,7 +184,7 @@ const App: React.FC = () => {
               <Route
                 path="/admin/security-logs"
                 element={
-                  <ProtectedRoute requiredRoles={['ADMIN']}>
+                  <ProtectedRoute requiredRoles={[UserRole.ADMIN]}>
                     <MainLayout>
                       <SecurityLogs />
                     </MainLayout>

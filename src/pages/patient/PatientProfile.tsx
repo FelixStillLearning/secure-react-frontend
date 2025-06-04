@@ -16,7 +16,8 @@ import {
   Camera
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { securityUtils } from '../../utils/security';
+import { SecurityUtils } from '../../utils/SecurityUtils';
+import { validateInput } from '../../utils/security';
 import { apiClient } from '../../api/axios.config';
 import { Patient } from '../../types/auth.types';
 
@@ -84,7 +85,7 @@ const PatientProfile: React.FC = () => {
       setLoading(true);
       
       // Validate session
-      const isValid = await securityUtils.validateSession();
+      const isValid = await SecurityUtils.validateSession();
       if (!isValid) {
         throw new Error('Session validation failed');
       }
@@ -109,15 +110,11 @@ const PatientProfile: React.FC = () => {
         medicalHistory: patientData.medicalHistory || ''
       });
 
-      securityUtils.logSecurityEvent({
-        type: 'profile_access',
-        severity: 'info',
-        message: 'Patient profile accessed',
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
+      SecurityUtils.logSecurityEvent({
+        action: 'profile_access',
+        success: true,
+        details: 'Patient profile accessed',
+        userId: user?.id
       });
 
     } catch (err: any) {
@@ -131,8 +128,8 @@ const PatientProfile: React.FC = () => {
     if (!profileForm.firstName.trim()) return 'First name is required';
     if (!profileForm.lastName.trim()) return 'Last name is required';
     if (!profileForm.email.trim()) return 'Email is required';
-    if (!securityUtils.validateEmail(profileForm.email)) return 'Invalid email format';
-    if (profileForm.phoneNumber && !securityUtils.validatePhoneNumber(profileForm.phoneNumber)) {
+    if (!validateInput.email(profileForm.email)) return 'Invalid email format';
+    if (profileForm.phoneNumber && !validateInput.phoneNumber(profileForm.phoneNumber)) {
       return 'Invalid phone number format';
     }
     return null;
@@ -145,7 +142,7 @@ const PatientProfile: React.FC = () => {
       return 'Passwords do not match';
     }
     
-    const passwordStrength = securityUtils.calculatePasswordStrength(passwordForm.newPassword);
+    const passwordStrength = SecurityUtils.calculatePasswordStrength(passwordForm.newPassword);
     if (passwordStrength.score < 3) {
       return 'Password is too weak. Use at least 8 characters with uppercase, lowercase, numbers, and symbols.';
     }
@@ -167,25 +164,25 @@ const PatientProfile: React.FC = () => {
       setError(null);
 
       // Rate limiting check
-      const canProceed = await securityUtils.checkRateLimit('profile_update', 5, 300); // 5 per 5 minutes
+      const canProceed = await SecurityUtils.checkRateLimit('profile_update', 5, 300); // 5 per 5 minutes
       if (!canProceed) {
         throw new Error('Too many update attempts. Please wait a moment.');
       }
 
       // Sanitize inputs
       const sanitizedData = {
-        firstName: securityUtils.sanitizeInput(profileForm.firstName),
-        lastName: securityUtils.sanitizeInput(profileForm.lastName),
-        email: securityUtils.sanitizeInput(profileForm.email),
-        phoneNumber: securityUtils.sanitizeInput(profileForm.phoneNumber),
+        firstName: SecurityUtils.sanitizeInput(profileForm.firstName),
+        lastName: SecurityUtils.sanitizeInput(profileForm.lastName),
+        email: SecurityUtils.sanitizeInput(profileForm.email),
+        phoneNumber: SecurityUtils.sanitizeInput(profileForm.phoneNumber),
         dateOfBirth: profileForm.dateOfBirth,
         gender: profileForm.gender,
-        address: securityUtils.sanitizeInput(profileForm.address),
-        emergencyContactName: securityUtils.sanitizeInput(profileForm.emergencyContactName),
-        emergencyContactPhone: securityUtils.sanitizeInput(profileForm.emergencyContactPhone),
-        bloodType: securityUtils.sanitizeInput(profileForm.bloodType),
-        allergies: securityUtils.sanitizeInput(profileForm.allergies),
-        medicalHistory: securityUtils.sanitizeInput(profileForm.medicalHistory)
+        address: SecurityUtils.sanitizeInput(profileForm.address),
+        emergencyContactName: SecurityUtils.sanitizeInput(profileForm.emergencyContactName),
+        emergencyContactPhone: SecurityUtils.sanitizeInput(profileForm.emergencyContactPhone),
+        bloodType: SecurityUtils.sanitizeInput(profileForm.bloodType),
+        allergies: SecurityUtils.sanitizeInput(profileForm.allergies),
+        medicalHistory: SecurityUtils.sanitizeInput(profileForm.medicalHistory)
       };
 
       const response = await apiClient.put(`/patients/${user?.id}`, sanitizedData);
@@ -198,30 +195,22 @@ const PatientProfile: React.FC = () => {
       setSuccess('Profile updated successfully');
       setPatient(response.data);
 
-      securityUtils.logSecurityEvent({
-        type: 'profile_updated',
-        severity: 'info',
-        message: 'Patient profile updated',
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
+      SecurityUtils.logSecurityEvent({
+        action: 'profile_updated',
+        success: true,
+        details: 'Patient profile updated',
+        userId: user?.id
       });
 
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Failed to update profile';
       setError(errorMessage);
       
-      securityUtils.logSecurityEvent({
-        type: 'profile_update_failed',
-        severity: 'warning',
-        message: `Profile update failed: ${errorMessage}`,
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
+      SecurityUtils.logSecurityEvent({
+        action: 'profile_update_failed',
+        success: false,
+        details: `Profile update failed: ${errorMessage}`,
+        userId: user?.id
       });
     } finally {
       setSaving(false);
@@ -242,7 +231,7 @@ const PatientProfile: React.FC = () => {
       setError(null);
 
       // Rate limiting check
-      const canProceed = await securityUtils.checkRateLimit('password_change', 3, 3600); // 3 per hour
+      const canProceed = await SecurityUtils.checkRateLimit('password_change', 3, 3600); // 3 per hour
       if (!canProceed) {
         throw new Error('Too many password change attempts. Please wait an hour.');
       }
@@ -259,30 +248,22 @@ const PatientProfile: React.FC = () => {
         confirmPassword: ''
       });
 
-      securityUtils.logSecurityEvent({
-        type: 'password_changed',
-        severity: 'info',
-        message: 'Password changed successfully',
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
+      SecurityUtils.logSecurityEvent({
+        action: 'password_changed',
+        success: true,
+        details: 'Password changed successfully',
+        userId: user?.id
       });
 
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Failed to change password';
       setError(errorMessage);
       
-      securityUtils.logSecurityEvent({
-        type: 'password_change_failed',
-        severity: 'warning',
-        message: `Password change failed: ${errorMessage}`,
-        userId: user?.id,
-        userAgent: navigator.userAgent,
-        timestamp: new Date(),
-        ipAddress: 'client-side',
-        sessionId: securityUtils.getSessionId() || 'unknown'
+      SecurityUtils.logSecurityEvent({
+        action: 'password_change_failed',
+        success: false,
+        details: `Password change failed: ${errorMessage}`,
+        userId: user?.id
       });
     } finally {
       setChangingPassword(false);
@@ -640,14 +621,14 @@ const PatientProfile: React.FC = () => {
                   {passwordForm.newPassword && (
                     <div className="mt-2">
                       {(() => {
-                        const strength = securityUtils.calculatePasswordStrength(passwordForm.newPassword);
+                        const strength = SecurityUtils.calculatePasswordStrength(passwordForm.newPassword);
                         return (
                           <div className={`text-sm ${
                             strength.score >= 4 ? 'text-green-600' :
                             strength.score >= 3 ? 'text-yellow-600' :
                             'text-red-600'
                           }`}>
-                            Password strength: {strength.label}
+                            Password strength: {strength.strength}
                           </div>
                         );
                       })()}

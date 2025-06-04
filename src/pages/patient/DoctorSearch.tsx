@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { securityUtils } from '../../utils/security';
-import { api } from '../../api/axios.config';
-import { Doctor, Specialization } from '../../types/auth.types';
+import api from '../../api/axios.config';
+import { Specialization } from '../../types/auth.types';
+import { auditLogger } from '../../utils/security';
 
 interface DoctorSearchFilters {
   search: string;
@@ -16,11 +16,54 @@ interface DoctorSearchFilters {
   gender: string;
 }
 
-interface DoctorWithDetails extends Doctor {
+interface DoctorWithDetails {
+  // Base Doctor fields from backend
+  id: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+  lastLogin?: string;
+  
+  // Backend fields that match the entity structure
+  first_name?: string;
+  last_name?: string;
+  profile_image_url?: string;
+  license_number?: string;
+  licenseNumber?: string; // alias
+  years_of_experience?: number;
+  experience?: number; // alias
+  qualifications?: string;
+  education?: string; // Add education property
+  bio?: string;
+  hospital_affiliation?: string;
+  languages?: string;
+  verified?: boolean;
+  consultation_fee?: number;
+  consultationFee?: number; // alias
+  
+  // Frontend computed fields
+  firstName?: string;
+  lastName?: string;
+  profileImageUrl?: string;
+  medicalLicenseNumber?: string;
+  hospitalAffiliation?: string;
+  services?: string;
+  officeAddress?: string;
+  workingHours?: {
+    [day: string]: {
+      available: boolean;
+      start: string;
+      end: string;
+    };
+  };
+  
+  // Extended fields for search functionality
   averageRating: number;
   totalReviews: number;
   nextAvailableSlot?: string;
   distance?: number;
+  specialization?: Specialization | string;
+  availability?: any[];
 }
 
 const DoctorSearchPage: React.FC = () => {
@@ -39,8 +82,7 @@ const DoctorSearchPage: React.FC = () => {
   const [filters, setFilters] = useState<DoctorSearchFilters>({
     search: '',
     specialization: '',
-    location: '',
-    rating: 0,
+    location: '',    rating: 0,
     experience: 0,
     consultationFee: { min: 0, max: 1000000 },
     availability: '',
@@ -48,70 +90,80 @@ const DoctorSearchPage: React.FC = () => {
     gender: ''
   });
 
-  useEffect(() => {
-    loadDoctors();
-    loadSpecializations();
-    loadFavorites();
-  }, []);
-
-  useEffect(() => {
-    applyFiltersAndSort();
-  }, [doctors, filters, sortBy]);
-
-  const loadDoctors = async () => {
+  const loadDoctors = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get('/doctors/search');
-      setDoctors(response.data);
+      const doctorsData = response.data.map((doctor: any) => ({
+        ...doctor,
+        // Map backend fields to frontend fields
+        firstName: doctor.first_name || doctor.firstName,
+        lastName: doctor.last_name || doctor.lastName,
+        profileImageUrl: doctor.profile_image_url || doctor.profileImageUrl,
+        medicalLicenseNumber: doctor.license_number || doctor.licenseNumber,
+        hospitalAffiliation: doctor.hospital_affiliation || doctor.hospitalAffiliation,
+        consultationFee: doctor.consultation_fee || doctor.consultationFee || 0,
+        experience: doctor.years_of_experience || doctor.experience || 0,
+        averageRating: doctor.averageRating || 0,
+        totalReviews: doctor.totalReviews || 0
+      }));
+      setDoctors(doctorsData);
       
-      securityUtils.logSecurityEvent({
-        type: 'DATA_ACCESS',
-        details: { action: 'search_doctors', resultCount: response.data.length },
-        severity: 'low',
-        userId: user?.id
-      });
+      console.log('Doctors loaded:', doctorsData.length);
     } catch (error) {
       console.error('Failed to load doctors:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadSpecializations = async () => {
+  const loadSpecializations = useCallback(async () => {
     try {
       const response = await api.get('/specializations');
       setSpecializations(response.data);
     } catch (error) {
       console.error('Failed to load specializations:', error);
     }
-  };
+  }, []);
 
-  const loadFavorites = async () => {
+  const loadFavorites = useCallback(async () => {
     try {
       const response = await api.get('/patients/favorite-doctors');
       setFavoriteIds(response.data.map((fav: any) => fav.doctorId));
     } catch (error) {
       console.error('Failed to load favorites:', error);
     }
-  };
+  }, []);
 
-  const applyFiltersAndSort = () => {
+  const applyFiltersAndSort = useCallback(() => {
     let filtered = [...doctors];
 
     // Apply search filter
     if (filters.search.trim()) {
       const searchLower = filters.search.toLowerCase();
-      filtered = filtered.filter(doctor =>
-        `${doctor.firstName} ${doctor.lastName}`.toLowerCase().includes(searchLower) ||
-        doctor.specialization?.name.toLowerCase().includes(searchLower) ||
-        doctor.bio?.toLowerCase().includes(searchLower) ||
-        doctor.hospitalAffiliation?.toLowerCase().includes(searchLower)
-      );
+      filtered = filtered.filter(doctor => {
+        const name = `${doctor.firstName || ''} ${doctor.lastName || ''}`.toLowerCase();
+        const specializationName = typeof doctor.specialization === 'object' 
+          ? doctor.specialization?.name?.toLowerCase() || ''
+          : doctor.specialization?.toLowerCase() || '';
+        const bio = doctor.bio?.toLowerCase() || '';
+        const hospital = doctor.hospitalAffiliation?.toLowerCase() || '';
+        
+        return name.includes(searchLower) ||
+               specializationName.includes(searchLower) ||
+               bio.includes(searchLower) ||
+               hospital.includes(searchLower);
+      });
     }
 
     // Apply specialization filter
     if (filters.specialization) {
-      filtered = filtered.filter(doctor => doctor.specialization?.id === filters.specialization);
+      filtered = filtered.filter(doctor => {
+        if (typeof doctor.specialization === 'object') {
+          return doctor.specialization?.id === filters.specialization;
+        }
+        return doctor.specialization === filters.specialization;
+      });
     }
 
     // Apply rating filter
@@ -121,35 +173,33 @@ const DoctorSearchPage: React.FC = () => {
 
     // Apply experience filter
     if (filters.experience > 0) {
-      filtered = filtered.filter(doctor => doctor.experience >= filters.experience);
+      filtered = filtered.filter(doctor => (doctor.experience || 0) >= filters.experience);
     }
 
     // Apply consultation fee filter
-    filtered = filtered.filter(doctor => 
-      doctor.consultationFee >= filters.consultationFee.min &&
-      doctor.consultationFee <= filters.consultationFee.max
-    );
+    filtered = filtered.filter(doctor => {
+      const fee = doctor.consultationFee || 0;
+      return fee >= filters.consultationFee.min && fee <= filters.consultationFee.max;
+    });
 
     // Apply languages filter
     if (filters.languages) {
       filtered = filtered.filter(doctor => 
         doctor.languages?.toLowerCase().includes(filters.languages.toLowerCase())
       );
-    }
-
-    // Apply sorting
+    }    // Apply sorting
     switch (sortBy) {
       case 'rating':
         filtered.sort((a, b) => b.averageRating - a.averageRating);
         break;
       case 'experience':
-        filtered.sort((a, b) => b.experience - a.experience);
+        filtered.sort((a, b) => (b.experience || 0) - (a.experience || 0));
         break;
       case 'fee_low':
-        filtered.sort((a, b) => a.consultationFee - b.consultationFee);
+        filtered.sort((a, b) => (a.consultationFee || 0) - (b.consultationFee || 0));
         break;
       case 'fee_high':
-        filtered.sort((a, b) => b.consultationFee - a.consultationFee);
+        filtered.sort((a, b) => (b.consultationFee || 0) - (a.consultationFee || 0));
         break;
       case 'reviews':
         filtered.sort((a, b) => b.totalReviews - a.totalReviews);
@@ -160,7 +210,7 @@ const DoctorSearchPage: React.FC = () => {
     }
 
     setFilteredDoctors(filtered);
-  };
+  }, [doctors, filters, sortBy]);
 
   const toggleFavorite = async (doctorId: string) => {
     try {
@@ -172,17 +222,10 @@ const DoctorSearchPage: React.FC = () => {
       } else {
         await api.post('/patients/favorite-doctors', { doctorId });
         setFavoriteIds([...favoriteIds, doctorId]);
-      }
-
-      securityUtils.logSecurityEvent({
-        type: 'DATA_MODIFICATION',
-        details: { 
-          action: isFavorite ? 'remove_favorite_doctor' : 'add_favorite_doctor',
-          doctorId 
-        },
-        severity: 'low',
-        userId: user?.id
-      });
+      }      auditLogger.log('DATA_MODIFICATION', true, { 
+        action: isFavorite ? 'remove_favorite_doctor' : 'add_favorite_doctor',
+        doctorId 
+      }, user?.id);
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
     }
@@ -213,15 +256,33 @@ const DoctorSearchPage: React.FC = () => {
       );
     }
     return stars;
-  };
-
-  const formatCurrency = (amount: number) => {
+  };  const formatCurrency = (amount: number | undefined) => {
+    if (amount === undefined || amount === null) {
+      return 'Price not available';
+    }
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: 'IDR',
       minimumFractionDigits: 0
     }).format(amount);
   };
+  const getSpecializationName = (specialization: Specialization | string | undefined): string => {
+    if (!specialization) return 'Not specified';
+    if (typeof specialization === 'string') return specialization;
+    return specialization.name || 'Not specified';
+  };
+
+  // Load data when component mounts
+  useEffect(() => {
+    loadDoctors();
+    loadSpecializations();
+    loadFavorites();
+  }, [loadDoctors, loadSpecializations, loadFavorites]);
+
+  // Apply filters when dependencies change
+  useEffect(() => {
+    applyFiltersAndSort();
+  }, [doctors, filters, sortBy, applyFiltersAndSort]);
 
   if (loading) {
     return (
@@ -452,7 +513,7 @@ const DoctorSearchPage: React.FC = () => {
                   )}
                 </div>
 
-                <p className="specialization">{doctor.specialization?.name}</p>
+                <p className="specialization">{getSpecializationName(doctor.specialization)}</p>
                 
                 <div className="rating">
                   <div className="stars">
@@ -550,7 +611,7 @@ const DoctorSearchPage: React.FC = () => {
                 </div>
                 <div className="profile-info">
                   <h3>Dr. {selectedDoctor.firstName} {selectedDoctor.lastName}</h3>
-                  <p className="specialization">{selectedDoctor.specialization?.name}</p>
+                  <p className="specialization">{getSpecializationName(selectedDoctor.specialization)}</p>
                   <div className="rating">
                     <div className="stars">
                       {renderStars(Math.round(selectedDoctor.averageRating))}

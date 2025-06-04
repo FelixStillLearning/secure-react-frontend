@@ -22,13 +22,13 @@ interface ResponsiveLayoutProps {
 const convertUserRole = (authRole: AuthUserRole): UserRole => {
   switch (authRole) {
     case AuthUserRole.PATIENT:
-      return 'PATIENT';
+      return UserRole.PATIENT;
     case AuthUserRole.DOCTOR:
-      return 'DOCTOR';
+      return UserRole.DOCTOR;
     case AuthUserRole.ADMIN:
-      return 'ADMIN';
+      return UserRole.ADMIN;
     default:
-      return 'PATIENT';
+      return UserRole.PATIENT; // Default to PATIENT if role is unknown
   }
 };
 
@@ -158,7 +158,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
 
         <div className="flex">          {/* Collapsible Side Navigation */}
           <div className="w-64 flex-shrink-0">
-            <Sidebar userRole={user?.role ? convertUserRole(user.role) : 'PATIENT'} />
+            <Sidebar userRole={user?.role ? convertUserRole(user.role) : UserRole.PATIENT} />
           </div>
 
           {/* Main Content */}
@@ -201,7 +201,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
         <Navbar />
 
         <div className="flex">          {/* Full Sidebar */}
-          <Sidebar userRole={user?.role ? convertUserRole(user.role) : 'PATIENT'} />
+          <Sidebar userRole={user?.role ? convertUserRole(user.role) : UserRole.PATIENT} />
 
           {/* Main Content */}
           <div className="flex-1 flex flex-col">

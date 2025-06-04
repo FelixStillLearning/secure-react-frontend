@@ -61,26 +61,24 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
     return breadcrumbs;
   };
   const breadcrumbs = generateBreadcrumbs();
-
   // Convert AuthContext UserRole to auth.types UserRole
   const convertUserRole = (authRole: AuthUserRole): UserRole => {
     switch (authRole) {
       case AuthUserRole.PATIENT:
-        return 'PATIENT';
+        return UserRole.PATIENT;
       case AuthUserRole.DOCTOR:
-        return 'DOCTOR';
+        return UserRole.DOCTOR;
       case AuthUserRole.ADMIN:
-        return 'ADMIN';
+        return UserRole.ADMIN;
       default:
-        return 'PATIENT';
+        return UserRole.PATIENT;
     }
   };
-
   const getRoleColor = (role: UserRole) => {
     switch (role) {
-      case 'ADMIN': return 'bg-red-100 text-red-800 border-red-200';
-      case 'DOCTOR': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'PATIENT': return 'bg-green-100 text-green-800 border-green-200';
+      case UserRole.ADMIN: return 'bg-red-100 text-red-800 border-red-200';
+      case UserRole.DOCTOR: return 'bg-blue-100 text-blue-800 border-blue-200';
+      case UserRole.PATIENT: return 'bg-green-100 text-green-800 border-green-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };

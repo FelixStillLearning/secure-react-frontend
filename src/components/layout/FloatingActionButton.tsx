@@ -18,10 +18,9 @@ interface ActionItem {
 const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ userRole }) => {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
-
   const getActions = (role: UserRole): ActionItem[] => {
     switch (role) {
-      case 'PATIENT':
+      case UserRole.PATIENT:
         return [
           {
             name: 'Emergency',
@@ -53,10 +52,9 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ userRole })
               </svg>
             ),
             color: 'bg-green-600 hover:bg-green-700',
-          },
-        ];
+          },        ];
 
-      case 'DOCTOR':
+      case UserRole.DOCTOR:
         return [
           {
             name: 'Emergency Patients',
@@ -88,10 +86,9 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ userRole })
               </svg>
             ),
             color: 'bg-green-600 hover:bg-green-700',
-          },
-        ];
+          },        ];
 
-      case 'ADMIN':
+      case UserRole.ADMIN:
         return [
           {
             name: 'System Alert',

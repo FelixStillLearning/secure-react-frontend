@@ -1,5 +1,5 @@
 import React, { Component, ReactNode } from 'react';
-import { SecurityUtils } from '../../utils/security';
+import { SecurityUtils } from '../../utils/SecurityUtils';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -24,12 +24,11 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     const errorId = Date.now().toString(36) + Math.random().toString(36).substr(2);
-    
-    // Log error for security monitoring
+      // Log error for security monitoring
     SecurityUtils.logSecurityEvent({
-      event: 'client_error_boundary',
-      severity: 'HIGH',
-      data: {
+      action: 'client_error_boundary',
+      success: false,
+      details: {
         errorId,
         message: error.message,
         stack: error.stack,
@@ -50,14 +49,16 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     
     // Additional logging for debugging
-    SecurityUtils.logSecurityEvent({
-      event: 'client_error_details',
-      severity: 'HIGH',
-      data: {
-        error: error.toString(),
-        errorInfo: errorInfo.componentStack,
-        props: this.props,
-        state: this.state
+    this.logError({
+      action: 'error_boundary_triggered',
+      success: false,
+      details: {
+        errorId: this.state.errorId,
+        message: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        url: window.location.href
       }
     });
   }
@@ -68,6 +69,14 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
   handleGoHome = () => {
     window.location.href = '/';
+  };
+
+  logError = (errorDetails: any) => {
+    SecurityUtils.logSecurityEvent({
+      action: 'error_boundary_reset',  
+      success: true,
+      details: { timestamp: new Date().toISOString() }
+    });
   };
 
   render() {

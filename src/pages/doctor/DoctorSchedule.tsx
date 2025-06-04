@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { securityUtils } from '../../utils/security';
-import { api } from '../../api/axios.config';
-import { DoctorSchedule, TimeSlot } from '../../types/auth.types';
+import { SecurityUtils } from '../../utils/SecurityUtils';
+import apiClient from '../../api/axios.config';
+import { DoctorSchedule } from '../../types/auth.types';
 
 interface ScheduleFormData {
   dayOfWeek: number;
@@ -26,32 +26,31 @@ const DoctorSchedulePage: React.FC = () => {
     maxPatients: 10
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-
   const daysOfWeek = [
     'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
   ];
 
-  useEffect(() => {
-    loadSchedules();
-  }, []);
-
-  const loadSchedules = async () => {
+  const loadSchedules = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get('/doctors/schedule');
+      const response = await apiClient.get('/doctors/schedule');
       setSchedules(response.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load schedules:', error);
-      securityUtils.logSecurityEvent({
-        type: 'DATA_ACCESS_ERROR',
-        details: { action: 'load_doctor_schedules', error: error.message },
-        severity: 'medium',
+      SecurityUtils.logSecurityEvent({
+        action: 'load_doctor_schedules_error',
+        success: false,
+        details: { error: error.message },
         userId: user?.id
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    loadSchedules();
+  }, [loadSchedules]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -79,30 +78,28 @@ const DoctorSchedulePage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
-
-    try {
+    if (!validateForm()) return;    try {
       const sanitizedData = {
         ...formData,
-        startTime: securityUtils.sanitizeInput(formData.startTime),
-        endTime: securityUtils.sanitizeInput(formData.endTime),
+        startTime: SecurityUtils.sanitizeInput(formData.startTime),
+        endTime: SecurityUtils.sanitizeInput(formData.endTime),
         maxPatients: Math.max(1, Math.min(50, formData.maxPatients))
       };
 
       if (editingSchedule) {
-        await api.put(`/doctors/schedule/${editingSchedule.id}`, sanitizedData);
-        securityUtils.logSecurityEvent({
-          type: 'DATA_MODIFICATION',
-          details: { action: 'update_doctor_schedule', scheduleId: editingSchedule.id },
-          severity: 'low',
+        await apiClient.put(`/doctors/schedule/${editingSchedule.id}`, sanitizedData);
+        SecurityUtils.logSecurityEvent({
+          action: 'update_doctor_schedule',
+          success: true,
+          details: { scheduleId: editingSchedule.id },
           userId: user?.id
         });
       } else {
-        await api.post('/doctors/schedule', sanitizedData);
-        securityUtils.logSecurityEvent({
-          type: 'DATA_CREATION',
-          details: { action: 'create_doctor_schedule', dayOfWeek: sanitizedData.dayOfWeek },
-          severity: 'low',
+        await apiClient.post('/doctors/schedule', sanitizedData);
+        SecurityUtils.logSecurityEvent({
+          action: 'create_doctor_schedule',
+          success: true,
+          details: { dayOfWeek: sanitizedData.dayOfWeek },
           userId: user?.id
         });
       }
@@ -128,16 +125,15 @@ const DoctorSchedulePage: React.FC = () => {
     });
     setShowForm(true);
   };
-
   const handleDelete = async (scheduleId: string) => {
     if (!window.confirm('Are you sure you want to delete this schedule?')) return;
 
     try {
-      await api.delete(`/doctors/schedule/${scheduleId}`);
-      securityUtils.logSecurityEvent({
-        type: 'DATA_DELETION',
-        details: { action: 'delete_doctor_schedule', scheduleId },
-        severity: 'medium',
+      await apiClient.delete(`/doctors/schedule/${scheduleId}`);
+      SecurityUtils.logSecurityEvent({
+        action: 'delete_doctor_schedule',
+        success: true,
+        details: { scheduleId },
         userId: user?.id
       });
       loadSchedules();
@@ -148,11 +144,11 @@ const DoctorSchedulePage: React.FC = () => {
 
   const toggleAvailability = async (scheduleId: string, isAvailable: boolean) => {
     try {
-      await api.patch(`/doctors/schedule/${scheduleId}/availability`, { isAvailable });
-      securityUtils.logSecurityEvent({
-        type: 'DATA_MODIFICATION',
-        details: { action: 'toggle_schedule_availability', scheduleId, isAvailable },
-        severity: 'low',
+      await apiClient.patch(`/doctors/schedule/${scheduleId}/availability`, { isAvailable });
+      SecurityUtils.logSecurityEvent({
+        action: 'toggle_schedule_availability',
+        success: true,
+        details: { scheduleId, isAvailable },
         userId: user?.id
       });
       loadSchedules();

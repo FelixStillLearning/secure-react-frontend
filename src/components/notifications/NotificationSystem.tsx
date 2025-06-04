@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { securityUtils } from '../../utils/security';
-import { api } from '../../api/axios.config';
+import { SecurityUtils } from '../../utils/SecurityUtils';
+import apiClient from '../../api/axios.config';
 
 interface Notification {
   id: string;
@@ -42,35 +42,18 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  useEffect(() => {
-    if (user) {
-      loadNotifications();
-      setupWebSocketConnection();
-    }
-  }, [user]);
-
   const loadNotifications = async () => {
     try {
-      const response = await api.get('/notifications');
+      const response = await apiClient.get('/notifications');
       setNotifications(response.data);
     } catch (error) {
       console.error('Failed to load notifications:', error);
     }
   };
 
-  const setupWebSocketConnection = () => {
-    // WebSocket setup for real-time notifications would go here
-    // For now, we'll simulate with periodic checks
-    const interval = setInterval(() => {
-      checkForNewNotifications();
-    }, 30000); // Check every 30 seconds
-
-    return () => clearInterval(interval);
-  };
-
   const checkForNewNotifications = async () => {
     try {
-      const response = await api.get('/notifications/new');
+      const response = await apiClient.get('/notifications/new');
       if (response.data.length > 0) {
         setNotifications(prev => [...response.data, ...prev]);
       }
@@ -78,6 +61,23 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       console.error('Failed to check for new notifications:', error);
     }
   };
+
+  const setupWebSocketConnection = useCallback(() => {
+    // WebSocket setup for real-time notifications would go here
+    // For now, we'll simulate with periodic checks
+    const interval = setInterval(() => {
+      checkForNewNotifications();
+    }, 30000); // Check every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      loadNotifications();
+      setupWebSocketConnection();
+    }
+  }, [user, setupWebSocketConnection]);
 
   const addNotification = (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
     const newNotification: Notification = {
@@ -87,24 +87,21 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       read: false
     };
 
-    setNotifications(prev => [newNotification, ...prev]);
-
-    // Log notification creation
-    securityUtils.logSecurityEvent({
-      type: 'SYSTEM_NOTIFICATION',
+    setNotifications(prev => [newNotification, ...prev]);    // Log notification creation
+    SecurityUtils.logSecurityEvent({
+      action: 'notification_created',
+      success: true,
       details: { 
-        action: 'notification_created', 
         notificationType: notification.type,
         title: notification.title 
       },
-      severity: 'low',
       userId: user?.id
     });
   };
 
   const markAsRead = async (id: string) => {
     try {
-      await api.patch(`/notifications/${id}/read`);
+      await apiClient.patch(`/notifications/${id}/read`);
       setNotifications(prev =>
         prev.map(notification =>
           notification.id === id ? { ...notification, read: true } : notification
@@ -117,7 +114,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
   const markAllAsRead = async () => {
     try {
-      await api.patch('/notifications/read-all');
+      await apiClient.patch('/notifications/read-all');
       setNotifications(prev =>
         prev.map(notification => ({ ...notification, read: true }))
       );
@@ -128,7 +125,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
   const removeNotification = async (id: string) => {
     try {
-      await api.delete(`/notifications/${id}`);
+      await apiClient.delete(`/notifications/${id}`);
       setNotifications(prev => prev.filter(notification => notification.id !== id));
     } catch (error) {
       console.error('Failed to remove notification:', error);
@@ -137,7 +134,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
   const clearAll = async () => {
     try {
-      await api.delete('/notifications/all');
+      await apiClient.delete('/notifications/all');
       setNotifications([]);
     } catch (error) {
       console.error('Failed to clear all notifications:', error);
@@ -172,9 +169,8 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isOp
   const { notifications, unreadCount, markAsRead, markAllAsRead, removeNotification } = useNotifications();
 
   if (!isOpen) return null;
-
   const getNotificationIcon = (type: string) => {
-    const icons = {
+    const icons: Record<string, string> = {
       info: 'fa-info-circle',
       success: 'fa-check-circle',
       warning: 'fa-exclamation-triangle',

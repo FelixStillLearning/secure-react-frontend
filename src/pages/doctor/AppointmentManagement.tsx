@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { securityUtils } from '../../utils/security';
-import { api } from '../../api/axios.config';
+import { auditLogger } from '../../utils/security';
+import { apiClient } from '../../api/axios.config';
 import { Appointment, Patient } from '../../types/auth.types';
 
 interface AppointmentWithPatient extends Appointment {
@@ -13,6 +13,94 @@ interface CalendarDay {
   isCurrentMonth: boolean;
   appointments: AppointmentWithPatient[];
 }
+
+// Helper functions to handle property access safely
+const getAppointmentDate = (appointment: AppointmentWithPatient): string => {
+  return appointment.appointmentDate || appointment.dateTime;
+};
+
+const getAppointmentType = (appointment: AppointmentWithPatient): string => {
+  return appointment.appointmentType || appointment.type;
+};
+
+const getPatientName = (patient: Patient): string => {
+  const firstName = patient.firstName || patient.profile?.firstName || '';
+  const lastName = patient.lastName || patient.profile?.lastName || '';
+  return `${firstName} ${lastName}`.trim() || 'Unknown Patient';
+};
+
+const getPatientPhone = (patient: Patient): string => {
+  return patient.phoneNumber || patient.profile?.phone || 'No phone';
+};
+
+const getPatientEmail = (patient: Patient): string => {
+  return patient.email || 'No email';
+};
+
+const safeFormatDateTime = (date?: string): string => {
+  if (!date) return 'No date';
+  try {
+    return new Date(date).toLocaleString();
+  } catch {
+    return 'Invalid date';
+  }
+};
+
+const safeFormatTime = (date?: string): string => {
+  if (!date) return 'No time';
+  try {
+    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return 'Invalid time';
+  }
+};
+
+const safeDateComparison = (dateA?: string, dateB?: string): number => {
+  const timeA = dateA ? new Date(dateA).getTime() : 0;
+  const timeB = dateB ? new Date(dateB).getTime() : 0;
+  return timeA - timeB;
+};
+
+// Map status values between different formats
+const mapStatusToDisplayFormat = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    'PENDING': 'scheduled',
+    'CONFIRMED': 'confirmed', 
+    'COMPLETED': 'completed',
+    'CANCELLED': 'cancelled'
+  };
+  return statusMap[status] || status.toLowerCase();
+};
+
+const mapStatusToApiFormat = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    'scheduled': 'PENDING',
+    'confirmed': 'CONFIRMED',
+    'completed': 'COMPLETED',
+    'cancelled': 'CANCELLED',
+    'in_progress': 'CONFIRMED', // Map in_progress to CONFIRMED for API
+    'no_show': 'CANCELLED'
+  };
+  return statusMap[status] || status;
+};
+
+// Status comparison helpers
+const isStatus = (appointment: AppointmentWithPatient, status: string): boolean => {
+  return mapStatusToDisplayFormat(appointment.status) === status;
+};
+
+const isAnyStatus = (appointment: AppointmentWithPatient, statuses: string[]): boolean => {
+  return statuses.includes(mapStatusToDisplayFormat(appointment.status));
+};
+
+// Use helper functions for formatting
+const formatDateTime = (date?: string): string => {
+  return safeFormatDateTime(date);
+};
+
+const formatTime = (date?: string): string => {
+  return safeFormatTime(date);
+};
 
 const DoctorAppointmentManagementPage: React.FC = () => {
   const { user } = useAuth();
@@ -28,77 +116,73 @@ const DoctorAppointmentManagementPage: React.FC = () => {
     dateRange: 'all'
   });
 
-  useEffect(() => {
-    loadAppointments();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [appointments, filters]);
-
-  const loadAppointments = async () => {
+  const loadAppointments = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get('/doctors/appointments');
+      const response = await apiClient.get('/doctors/appointments');
       setAppointments(response.data);
       
-      securityUtils.logSecurityEvent({
-        type: 'DATA_ACCESS',
-        details: { action: 'view_doctor_appointments', appointmentCount: response.data.length },
-        severity: 'low',
-        userId: user?.id
-      });
+      auditLogger.log('view_doctor_appointments', true, { 
+        appointmentCount: response.data.length 
+      }, user?.id);
     } catch (error) {
       console.error('Failed to load appointments:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
 
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     let filtered = [...appointments];
 
     // Status filter
     if (filters.status !== 'all') {
-      filtered = filtered.filter(appointment => appointment.status === filters.status);
+      filtered = filtered.filter(appointment => isStatus(appointment, filters.status));
     }
 
     // Date range filter
     const today = new Date();
     if (filters.dateRange === 'today') {
       filtered = filtered.filter(appointment => {
-        const appointmentDate = new Date(appointment.appointmentDate);
-        return appointmentDate.toDateString() === today.toDateString();
+        const appointmentDate = getAppointmentDate(appointment);
+        if (!appointmentDate) return false;
+        return new Date(appointmentDate).toDateString() === today.toDateString();
       });
     } else if (filters.dateRange === 'week') {
       const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
       filtered = filtered.filter(appointment => {
-        const appointmentDate = new Date(appointment.appointmentDate);
-        return appointmentDate >= today && appointmentDate <= nextWeek;
+        const appointmentDate = getAppointmentDate(appointment);
+        if (!appointmentDate) return false;
+        const date = new Date(appointmentDate);
+        return date >= today && date <= nextWeek;
       });
     }
 
     // Sort by date
     filtered.sort((a, b) => 
-      new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime()
+      safeDateComparison(getAppointmentDate(a), getAppointmentDate(b))
     );
 
     setFilteredAppointments(filtered);
-  };
+  }, [appointments, filters]);
 
-  const updateAppointmentStatus = async (appointmentId: string, status: string, notes?: string) => {
+  useEffect(() => {
+    loadAppointments();
+  }, [loadAppointments]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [applyFilters]);  const updateAppointmentStatus = async (appointmentId: string, status: string, notes?: string) => {
     try {
-      const updateData: any = { status };
+      const updateData: any = { status: mapStatusToApiFormat(status) };
       if (notes) updateData.doctorNotes = notes;
 
-      await api.patch(`/appointments/${appointmentId}`, updateData);
+      await apiClient.patch(`/appointments/${appointmentId}`, updateData);
       
-      securityUtils.logSecurityEvent({
-        type: 'DATA_MODIFICATION',
-        details: { action: 'update_appointment_status', appointmentId, newStatus: status },
-        severity: 'medium',
-        userId: user?.id
-      });
+      auditLogger.log('update_appointment_status', true, { 
+        appointmentId, 
+        newStatus: status 
+      }, user?.id);
       
       loadAppointments();
       setShowAppointmentModal(false);
@@ -108,7 +192,7 @@ const DoctorAppointmentManagementPage: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const statusClasses = {
+    const statusClasses: Record<string, string> = {
       scheduled: 'status-scheduled',
       confirmed: 'status-confirmed',
       in_progress: 'status-in-progress',
@@ -117,27 +201,21 @@ const DoctorAppointmentManagementPage: React.FC = () => {
       no_show: 'status-no-show'
     };
     
+    const displayStatus = mapStatusToDisplayFormat(status);
     return (
-      <span className={`status-badge ${statusClasses[status.toLowerCase()] || 'status-default'}`}>
-        {status.replace('_', ' ').charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+      <span className={`status-badge ${statusClasses[displayStatus] || 'status-default'}`}>
+        {displayStatus.replace('_', ' ').charAt(0).toUpperCase() + displayStatus.slice(1).replace('_', ' ')}
       </span>
     );
-  };
-
-  const formatDateTime = (date: string) => {
-    return new Date(date).toLocaleString();
-  };
-
-  const formatTime = (date: string) => {
-    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   const getTodaysAppointments = () => {
     const today = new Date();
     return appointments.filter(appointment => {
-      const appointmentDate = new Date(appointment.appointmentDate);
-      return appointmentDate.toDateString() === today.toDateString();
-    }).sort((a, b) => new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime());
+      const appointmentDate = getAppointmentDate(appointment);
+      if (!appointmentDate) return false;
+      return new Date(appointmentDate).toDateString() === today.toDateString();
+    }).sort((a, b) => safeDateComparison(getAppointmentDate(a), getAppointmentDate(b)));
   };
 
   const generateCalendarDays = (): CalendarDay[] => {
@@ -153,8 +231,9 @@ const DoctorAppointmentManagementPage: React.FC = () => {
     
     while (current <= lastDay || current.getDay() !== 0) {
       const dayAppointments = appointments.filter(appointment => {
-        const appointmentDate = new Date(appointment.appointmentDate);
-        return appointmentDate.toDateString() === current.toDateString();
+        const appointmentDate = getAppointmentDate(appointment);
+        if (!appointmentDate) return false;
+        return new Date(appointmentDate).toDateString() === current.toDateString();
       });
       
       days.push({
@@ -251,16 +330,15 @@ const DoctorAppointmentManagementPage: React.FC = () => {
               <div className="stat-item">
                 <span className="stat-number">{todaysAppointments.length}</span>
                 <span className="stat-label">Total Appointments</span>
-              </div>
-              <div className="stat-item">
+              </div>              <div className="stat-item">
                 <span className="stat-number">
-                  {todaysAppointments.filter(a => a.status === 'completed').length}
+                  {todaysAppointments.filter(a => isStatus(a, 'completed')).length}
                 </span>
                 <span className="stat-label">Completed</span>
               </div>
               <div className="stat-item">
                 <span className="stat-number">
-                  {todaysAppointments.filter(a => a.status === 'scheduled' || a.status === 'confirmed').length}
+                  {todaysAppointments.filter(a => isAnyStatus(a, ['scheduled', 'confirmed'])).length}
                 </span>
                 <span className="stat-label">Upcoming</span>
               </div>
@@ -286,20 +364,17 @@ const DoctorAppointmentManagementPage: React.FC = () => {
                 >
                   <div className="appointment-time">
                     {formatTime(appointment.appointmentDate)}
-                  </div>
-                  <div className="appointment-content">
+                  </div>                  <div className="appointment-content">
                     <div className="patient-info">
-                      <h4>{appointment.patient.firstName} {appointment.patient.lastName}</h4>
+                      <h4>{getPatientName(appointment.patient)}</h4>
                       <p>Age: {appointment.patient.dateOfBirth ? 
                         new Date().getFullYear() - new Date(appointment.patient.dateOfBirth).getFullYear() : 'N/A'}</p>
-                      {appointment.patient.phoneNumber && (
-                        <p>Phone: {appointment.patient.phoneNumber}</p>
-                      )}
+                      <p>Phone: {getPatientPhone(appointment.patient)}</p>
                     </div>
                     <div className="appointment-details">
                       {getStatusBadge(appointment.status)}
-                      {appointment.appointmentType && (
-                        <span className="appointment-type">{appointment.appointmentType}</span>
+                      {getAppointmentType(appointment) && (
+                        <span className="appointment-type">{getAppointmentType(appointment)}</span>
                       )}
                     </div>
                   </div>
@@ -362,9 +437,8 @@ const DoctorAppointmentManagementPage: React.FC = () => {
                       >
                         <span className="appointment-time">
                           {formatTime(appointment.appointmentDate)}
-                        </span>
-                        <span className="patient-name">
-                          {appointment.patient.firstName} {appointment.patient.lastName}
+                        </span>                        <span className="patient-name">
+                          {getPatientName(appointment.patient)}
                         </span>
                       </div>
                     ))}
@@ -400,11 +474,10 @@ const DoctorAppointmentManagementPage: React.FC = () => {
                     setSelectedAppointment(appointment);
                     setShowAppointmentModal(true);
                   }}
-                >
-                  <div className="appointment-header">
+                >                  <div className="appointment-header">
                     <div className="patient-info">
-                      <h3>{appointment.patient.firstName} {appointment.patient.lastName}</h3>
-                      <p>{appointment.patient.phoneNumber}</p>
+                      <h3>{getPatientName(appointment.patient)}</h3>
+                      <p>{getPatientPhone(appointment.patient)}</p>
                     </div>
                     <div className="appointment-status">
                       {getStatusBadge(appointment.status)}
@@ -414,12 +487,12 @@ const DoctorAppointmentManagementPage: React.FC = () => {
                   <div className="appointment-details">
                     <div className="appointment-time">
                       <i className="fas fa-calendar-alt"></i>
-                      <span>{formatDateTime(appointment.appointmentDate)}</span>
+                      <span>{formatDateTime(getAppointmentDate(appointment))}</span>
                     </div>
-                    {appointment.appointmentType && (
+                    {getAppointmentType(appointment) && (
                       <div className="appointment-type">
                         <i className="fas fa-stethoscope"></i>
-                        <span>{appointment.appointmentType}</span>
+                        <span>{getAppointmentType(appointment)}</span>
                       </div>
                     )}
                   </div>
@@ -455,10 +528,9 @@ const DoctorAppointmentManagementPage: React.FC = () => {
               <div className="appointment-details-modal">
                 <div className="patient-section">
                   <h3>Patient Information</h3>
-                  <div className="patient-details">
-                    <p><strong>Name:</strong> {selectedAppointment.patient.firstName} {selectedAppointment.patient.lastName}</p>
-                    <p><strong>Phone:</strong> {selectedAppointment.patient.phoneNumber}</p>
-                    <p><strong>Email:</strong> {selectedAppointment.patient.user?.email}</p>
+                  <div className="patient-details">                    <p><strong>Name:</strong> {getPatientName(selectedAppointment.patient)}</p>
+                    <p><strong>Phone:</strong> {getPatientPhone(selectedAppointment.patient)}</p>
+                    <p><strong>Email:</strong> {getPatientEmail(selectedAppointment.patient)}</p>
                     {selectedAppointment.patient.dateOfBirth && (
                       <p><strong>Age:</strong> {new Date().getFullYear() - new Date(selectedAppointment.patient.dateOfBirth).getFullYear()} years</p>
                     )}
@@ -472,12 +544,11 @@ const DoctorAppointmentManagementPage: React.FC = () => {
                 </div>
 
                 <div className="appointment-section">
-                  <h3>Appointment Information</h3>
-                  <div className="appointment-info">
-                    <p><strong>Date & Time:</strong> {formatDateTime(selectedAppointment.appointmentDate)}</p>
+                  <h3>Appointment Information</h3>                  <div className="appointment-info">
+                    <p><strong>Date & Time:</strong> {formatDateTime(getAppointmentDate(selectedAppointment))}</p>
                     <p><strong>Status:</strong> {getStatusBadge(selectedAppointment.status)}</p>
-                    {selectedAppointment.appointmentType && (
-                      <p><strong>Type:</strong> {selectedAppointment.appointmentType}</p>
+                    {getAppointmentType(selectedAppointment) && (
+                      <p><strong>Type:</strong> {getAppointmentType(selectedAppointment)}</p>
                     )}
                     {selectedAppointment.notes && (
                       <p><strong>Patient Notes:</strong> {selectedAppointment.notes}</p>
@@ -486,11 +557,9 @@ const DoctorAppointmentManagementPage: React.FC = () => {
                       <p><strong>Doctor Notes:</strong> {selectedAppointment.doctorNotes}</p>
                     )}
                   </div>
-                </div>
-
-                {/* Quick Actions */}
+                </div>                {/* Quick Actions */}
                 <div className="appointment-actions">
-                  {selectedAppointment.status === 'scheduled' && (
+                  {isStatus(selectedAppointment, 'scheduled') && (
                     <>
                       <button
                         className="btn btn-success"
@@ -509,7 +578,7 @@ const DoctorAppointmentManagementPage: React.FC = () => {
                     </>
                   )}
                   
-                  {selectedAppointment.status === 'confirmed' && (
+                  {isStatus(selectedAppointment, 'confirmed') && (
                     <button
                       className="btn btn-primary"
                       onClick={() => updateAppointmentStatus(selectedAppointment.id, 'in_progress')}
@@ -519,7 +588,7 @@ const DoctorAppointmentManagementPage: React.FC = () => {
                     </button>
                   )}
 
-                  {selectedAppointment.status === 'in_progress' && (
+                  {isStatus(selectedAppointment, 'in_progress') && (
                     <button
                       className="btn btn-success"
                       onClick={() => updateAppointmentStatus(selectedAppointment.id, 'completed', 'Consultation completed')}
@@ -529,7 +598,7 @@ const DoctorAppointmentManagementPage: React.FC = () => {
                     </button>
                   )}
 
-                  {(selectedAppointment.status === 'scheduled' || selectedAppointment.status === 'confirmed') && (
+                  {isAnyStatus(selectedAppointment, ['scheduled', 'confirmed']) && (
                     <button
                       className="btn btn-warning"
                       onClick={() => updateAppointmentStatus(selectedAppointment.id, 'no_show')}

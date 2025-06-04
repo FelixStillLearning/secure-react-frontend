@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { UserRole } from '../../types/auth.types';
 
+
 interface TabItem {
   name: string;
   href: string;
@@ -17,10 +18,9 @@ interface MobileBottomTabsProps {
 
 const MobileBottomTabs: React.FC<MobileBottomTabsProps> = ({ userRole, notificationCount = 0 }) => {
   const location = useLocation();
-
   const getTabItems = (role: UserRole): TabItem[] => {
     switch (role) {
-      case 'PATIENT':
+      case UserRole.PATIENT:
         return [
           {
             name: 'Home',
@@ -92,10 +92,9 @@ const MobileBottomTabs: React.FC<MobileBottomTabsProps> = ({ userRole, notificat
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
               </svg>
             ),
-          },
-        ];
+          },        ];
 
-      case 'DOCTOR':
+      case UserRole.DOCTOR:
         return [
           {
             name: 'Dashboard',
@@ -170,7 +169,7 @@ const MobileBottomTabs: React.FC<MobileBottomTabsProps> = ({ userRole, notificat
           },
         ];
 
-      case 'ADMIN':
+      case UserRole.ADMIN:
         return [
           {
             name: 'Dashboard',

@@ -192,9 +192,7 @@ const SystemSettings: React.FC = () => {
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [unsavedChanges, setUnsavedChanges] = useState(false);
-  const [testResults, setTestResults] = useState<Record<string, boolean>>({});
+  const [searchTerm, setSearchTerm] = useState('');  const [unsavedChanges, setUnsavedChanges] = useState(false);
   const loadSystemConfig = useCallback(async () => {
     try {
       setLoading(true);
@@ -262,13 +260,7 @@ const SystemSettings: React.FC = () => {
   const handleTestConfiguration = async (testType: string) => {
     try {
       setTesting(true);
-      const response = await apiClient.post(`/admin/system/test/${testType}`, config);
-      
-      setTestResults(prev => ({
-        ...prev,
-        [testType]: response.data.success
-      }));
-      
+      const response = await apiClient.post(`/admin/system/test/${testType}`, config);      
       if (response.data.success) {
         setSuccess(`${testType} test passed successfully`);
       } else {
@@ -277,13 +269,8 @@ const SystemSettings: React.FC = () => {
       auditLogger.log('ADMIN_TEST_CONFIGURATION', response.data.success, { 
         testType,
         message: `Admin tested configuration: ${testType}`
-      }, user?.id);
-    } catch (err) {
+      }, user?.id);    } catch (err) {
       setError(`Failed to test ${testType} configuration`);
-      setTestResults(prev => ({
-        ...prev,
-        [testType]: false
-      }));
     } finally {
       setTesting(false);
     }

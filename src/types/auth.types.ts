@@ -69,6 +69,7 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
   updateProfile: (profile: Partial<UserProfile>) => Promise<void>;
+  updateUser: (user: Partial<User>) => Promise<void>;
   changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
   hasPermission: (permission: string) => boolean;
   hasRole: (role: UserRole) => boolean;
@@ -93,9 +94,17 @@ export interface SecurityLog {
   updatedAt?: string;
 }
 
-export interface SecurityLogWithUser extends SecurityLog {
+export interface SecurityLogWithUser extends SecurityEvent {
+  id: string;
+  type: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  timestamp: string;
+  userId: string;
+  details: Record<string, any>;
   userName?: string;
   userEmail?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface DeviceFingerprint {
@@ -163,7 +172,10 @@ export interface ApiError {
 export interface Patient extends User {
   firstName?: string; // Direct name properties for easier access
   lastName?: string;
+  phone?: string; // Add phone property
   phoneNumber?: string;
+  name?: string; // Add name property for display
+  age?: number; // Add age property
   allergies?: string;
   medicalHistory?: MedicalHistory[];
   appointments?: Appointment[];
@@ -191,7 +203,12 @@ export interface Doctor extends User {
   hospitalName?: string;
   hospital?: string; // Hospital name property used in appointments
   phoneNumber?: string;
+  phone?: string; // Add phone property
   bio?: string;
+  verified?: boolean; // Add verified property
+  profileImageUrl?: string; // Add profile image URL
+  firstName?: string; // Add first name
+  lastName?: string; // Add last name
 }
 
 export interface MedicalHistory {
@@ -221,6 +238,9 @@ export interface Appointment {
   fee: number;
   createdAt: string;
   updatedAt: string;
+  // Nested objects for populated data
+  patient?: Patient;
+  doctor?: Doctor;
 }
 
 export interface DoctorAvailability {
@@ -263,6 +283,9 @@ export interface Review {
   rating: number; // 1-5
   comment: string;
   createdAt: string;
+  // Nested objects for populated data
+  patient?: Patient;
+  doctor?: Doctor;
 }
 
 export interface Specialization {

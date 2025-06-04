@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { SecurityUtils } from '../../utils/SecurityUtils';
 import apiClient from '../../api/axios.config';
-import { SecurityEvent } from '../../types/auth.types';
+import { SecurityLogWithUser } from '../../types/auth.types';
 
 interface SecurityLogFilters {
   severity: string;
@@ -11,11 +11,6 @@ interface SecurityLogFilters {
   dateFrom: string;
   dateTo: string;
   search: string;
-}
-
-interface SecurityLogWithUser extends SecurityEvent {
-  userName?: string;
-  userEmail?: string;
 }
 
 interface SecurityStats {
@@ -49,18 +44,7 @@ const SecurityLogsPage: React.FC = () => {
     dateFrom: '',
     dateTo: '',
     search: ''
-  });
-
-  useEffect(() => {
-    loadSecurityLogs();
-    loadSecurityStats();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [logs, filters]);
-
-  const loadSecurityLogs = async () => {
+  });  const loadSecurityLogs = useCallback(async () => {
     try {
       setLoading(true);
       const response = await apiClient.get('/admin/security-logs');
@@ -71,7 +55,8 @@ const SecurityLogsPage: React.FC = () => {
         details: { logCount: response.data.length },
         userId: user?.id
       });
-    } catch (error) {      console.error('Failed to load security logs:', error);
+    } catch (error) {
+      console.error('Failed to load security logs:', error);
       SecurityUtils.logSecurityEvent({
         action: 'load_security_logs_error',
         success: false,
@@ -81,18 +66,17 @@ const SecurityLogsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadSecurityStats = async () => {
+  }, [user?.id]);
+  const loadSecurityStats = useCallback(async () => {
     try {
       const response = await apiClient.get('/admin/security-stats');
       setStats(response.data);
     } catch (error) {
       console.error('Failed to load security stats:', error);
     }
-  };
+  }, []);
 
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     let filtered = [...logs];
 
     // Severity filter
@@ -131,25 +115,29 @@ const SecurityLogsPage: React.FC = () => {
         log.userName?.toLowerCase().includes(searchTerm) ||
         log.userEmail?.toLowerCase().includes(searchTerm)
       );
-    }
+    }    setFilteredLogs(filtered);
+  }, [logs, filters]);
 
-    setFilteredLogs(filtered);
-  };
+  useEffect(() => {
+    loadSecurityLogs();
+    loadSecurityStats();
+  }, [loadSecurityLogs, loadSecurityStats]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [applyFilters]);
 
   const handleLogClick = (log: SecurityLogWithUser) => {
     setSelectedLog(log);
-    setShowLogModal(true);
-    
-    securityUtils.logSecurityEvent({
-      type: 'ADMIN_ACTION',
-      details: { action: 'view_security_log_details', logId: log.id },
-      severity: 'low',
+    setShowLogModal(true);    SecurityUtils.logSecurityEvent({
+      action: 'view_security_log_details',
+      success: true,
+      details: { logId: log.id },
       userId: user?.id
     });
   };
-
   const getSeverityBadge = (severity: string) => {
-    const severityClasses = {
+    const severityClasses: { [key: string]: string } = {
       high: 'severity-high',
       medium: 'severity-medium',
       low: 'severity-low'
@@ -161,9 +149,8 @@ const SecurityLogsPage: React.FC = () => {
       </span>
     );
   };
-
   const getTypeIcon = (type: string) => {
-    const typeIcons = {
+    const typeIcons: { [key: string]: string } = {
       LOGIN_ATTEMPT: 'fa-sign-in-alt',
       LOGIN_SUCCESS: 'fa-check-circle',
       LOGIN_FAILURE: 'fa-times-circle',
@@ -226,11 +213,10 @@ const SecurityLogsPage: React.FC = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
-      securityUtils.logSecurityEvent({
-        type: 'ADMIN_ACTION',
-        details: { action: 'export_security_logs' },
-        severity: 'medium',
+        SecurityUtils.logSecurityEvent({
+        action: 'export_security_logs',
+        success: true,
+        details: { format: 'csv' },
         userId: user?.id
       });
     } catch (error) {

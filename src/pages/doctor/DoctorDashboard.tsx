@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, 
-  Clock, 
   Users, 
   TrendingUp, 
   Star, 
@@ -15,7 +14,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { SecurityUtils } from '../../utils/SecurityUtils';
 import { apiClient } from '../../api/axios.config';
-import { Doctor, Appointment, Patient, Review } from '../../types/auth.types';
+import { Doctor, Appointment, Review } from '../../types/auth.types';
 
 interface DoctorStats {
   todayAppointments: number;
@@ -233,7 +232,7 @@ const DoctorDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
-                Good morning, Dr. {user?.name || 'Doctor'}!
+                Good morning, Dr. {user?.name || `${user?.profile?.firstName || ''} ${user?.profile?.lastName || ''}`.trim() || 'Doctor'}!
               </h1>
               <p className="text-gray-600 mt-1">
                 You have {stats.todayAppointments} appointments today
@@ -241,7 +240,7 @@ const DoctorDashboard: React.FC = () => {
             </div>
             <div className="flex items-center space-x-4">
               <div className="text-sm text-gray-500">
-                {doctor?.specialization?.name}
+                {typeof doctor?.specialization === 'string' ? doctor.specialization : doctor?.specialization?.name}
               </div>
               <div className="flex items-center text-sm text-gray-500">
                 <Star className="w-4 h-4 text-yellow-400 mr-1" />
@@ -337,13 +336,12 @@ const DoctorDashboard: React.FC = () => {
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(schedule.status)}`}>
                               {schedule.status.replace('_', ' ').toUpperCase()}
                             </span>
-                          </div>
-                          <h3 className="font-medium text-gray-900 mt-2">
-                            {schedule.appointment.patient?.user?.name}
+                          </div>                          <h3 className="font-medium text-gray-900 mt-2">
+                            {schedule.appointment.patient?.name || `${schedule.appointment.patient?.firstName || ''} ${schedule.appointment.patient?.lastName || ''}`.trim() || 'Patient'}
                           </h3>
                           <p className="text-sm text-gray-600">
                             Age: {schedule.appointment.patient?.age || 'N/A'} • 
-                            Phone: {schedule.appointment.patient?.phoneNumber || 'N/A'}
+                            Phone: {schedule.appointment.patient?.phoneNumber || schedule.appointment.patient?.phone || 'N/A'}
                           </p>
                           {schedule.appointment.notes && (
                             <p className="text-sm text-gray-600 mt-2">
@@ -383,12 +381,11 @@ const DoctorDashboard: React.FC = () => {
                   {pendingAppointments.slice(0, 5).map((appointment) => (
                     <div key={appointment.id} className="border border-gray-200 rounded-lg p-4">
                       <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="font-medium text-gray-900">
-                            {appointment.patient?.user?.name}
+                        <div>                          <h3 className="font-medium text-gray-900">
+                            {appointment.patient?.name || `${appointment.patient?.firstName || ''} ${appointment.patient?.lastName || ''}`.trim() || 'Patient'}
                           </h3>
                           <p className="text-sm text-gray-600">
-                            {formatDate(appointment.appointmentDate)} at {formatTime(appointment.appointmentDate)}
+                            {formatDate(appointment.appointmentDate || appointment.dateTime)} at {formatTime(appointment.appointmentDate || appointment.dateTime)}
                           </p>
                         </div>
                       </div>
@@ -442,9 +439,8 @@ const DoctorDashboard: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {recentReviews.map((review) => (
                   <div key={review.id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-medium text-gray-900">
-                        {review.patient?.user?.name}
+                    <div className="flex items-center justify-between mb-3">                      <h3 className="font-medium text-gray-900">
+                        {review.patient?.name || `${review.patient?.firstName || ''} ${review.patient?.lastName || ''}`.trim() || 'Patient'}
                       </h3>
                       <div className="flex items-center">
                         {renderStars(review.rating)}
